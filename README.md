@@ -31,7 +31,9 @@ int main() {
   onto a plane.
 - **Shapes**: `Circle`, `Rectangle`, `LineSegment` and `Triangle`, with
   `containsPoint`, closest-point and distance queries, and factory functions
-  such as `Rectangle::fromCenterAndSize` and `Triangle::equilateral`.
+  such as `Rectangle::fromCenterAndSize` and `Triangle::equilateral`. All
+  shapes scale about the origin with `*`, `/`, `scaledBy` and `dividedBy`;
+  segments can also scale from their start, end or midpoint.
 - **`intersects(a, b)`**: defined for every pair of shapes, in either order.
 - **Output**: `operator<<` and `std::format` for every type, with format
   specs applied to each component (`std::format("{:.2f}", v)`).

@@ -52,11 +52,11 @@ template <std::floating_point T> struct Vec2 {
     return {x - other.x, y - other.y};
   }
   [[nodiscard]]
-  constexpr Vec2 scaled(T scalar) const {
+  constexpr Vec2 scaledBy(T scalar) const {
     return {x * scalar, y * scalar};
   }
   [[nodiscard]]
-  constexpr Vec2 divided(T scalar) const {
+  constexpr Vec2 dividedBy(T scalar) const {
     assert(scalar != 0 && "Cannot divide by 0");
     return {x / scalar, y / scalar};
   }
@@ -69,8 +69,8 @@ template <std::floating_point T> struct Vec2 {
   constexpr Vec2 &subtract(const Vec2 &other) {
     return *this = subtracted(other);
   }
-  constexpr Vec2 &scale(T scalar) { return *this = scaled(scalar); }
-  constexpr Vec2 &divide(T scalar) { return *this = divided(scalar); }
+  constexpr Vec2 &scaleBy(T scalar) { return *this = scaledBy(scalar); }
+  constexpr Vec2 &divideBy(T scalar) { return *this = dividedBy(scalar); }
   constexpr Vec2 &scaleBy(const Vec2 &other) { return *this = scaledBy(other); }
 
   [[nodiscard]]
@@ -83,15 +83,15 @@ template <std::floating_point T> struct Vec2 {
   }
   [[nodiscard]]
   constexpr Vec2 operator*(T scalar) const {
-    return scaled(scalar);
+    return scaledBy(scalar);
   }
   [[nodiscard]]
   friend constexpr Vec2 operator*(T scalar, const Vec2 &vec) {
-    return vec.scaled(scalar);
+    return vec.scaledBy(scalar);
   }
   [[nodiscard]]
   constexpr Vec2 operator/(T scalar) const {
-    return divided(scalar);
+    return dividedBy(scalar);
   }
   [[nodiscard]]
   constexpr Vec2 operator-() const {
@@ -100,8 +100,8 @@ template <std::floating_point T> struct Vec2 {
 
   constexpr Vec2 &operator+=(const Vec2 &other) { return add(other); }
   constexpr Vec2 &operator-=(const Vec2 &other) { return subtract(other); }
-  constexpr Vec2 &operator*=(T scalar) { return scale(scalar); }
-  constexpr Vec2 &operator/=(T scalar) { return divide(scalar); }
+  constexpr Vec2 &operator*=(T scalar) { return scaleBy(scalar); }
+  constexpr Vec2 &operator/=(T scalar) { return divideBy(scalar); }
 
   constexpr Vec2 &set(T newX, T newY) {
     x = newX;
@@ -336,11 +336,11 @@ template <std::floating_point T> struct Vec3 {
     return {x - other.x, y - other.y, z - other.z};
   }
   [[nodiscard]]
-  constexpr Vec3 scaled(T scalar) const {
+  constexpr Vec3 scaledBy(T scalar) const {
     return {x * scalar, y * scalar, z * scalar};
   }
   [[nodiscard]]
-  constexpr Vec3 divided(T scalar) const {
+  constexpr Vec3 dividedBy(T scalar) const {
     assert(scalar != 0 && "Cannot divide by 0");
     return {x / scalar, y / scalar, z / scalar};
   }
@@ -353,8 +353,8 @@ template <std::floating_point T> struct Vec3 {
   constexpr Vec3 &subtract(const Vec3 &other) {
     return *this = subtracted(other);
   }
-  constexpr Vec3 &scale(T scalar) { return *this = scaled(scalar); }
-  constexpr Vec3 &divide(T scalar) { return *this = divided(scalar); }
+  constexpr Vec3 &scaleBy(T scalar) { return *this = scaledBy(scalar); }
+  constexpr Vec3 &divideBy(T scalar) { return *this = dividedBy(scalar); }
   constexpr Vec3 &scaleBy(const Vec3 &other) { return *this = scaledBy(other); }
 
   [[nodiscard]]
@@ -367,15 +367,15 @@ template <std::floating_point T> struct Vec3 {
   }
   [[nodiscard]]
   constexpr Vec3 operator*(T scalar) const {
-    return scaled(scalar);
+    return scaledBy(scalar);
   }
   [[nodiscard]]
   friend constexpr Vec3 operator*(T scalar, const Vec3 &vec) {
-    return vec.scaled(scalar);
+    return vec.scaledBy(scalar);
   }
   [[nodiscard]]
   constexpr Vec3 operator/(T scalar) const {
-    return divided(scalar);
+    return dividedBy(scalar);
   }
   [[nodiscard]]
   constexpr Vec3 operator-() const {
@@ -384,8 +384,8 @@ template <std::floating_point T> struct Vec3 {
 
   constexpr Vec3 &operator+=(const Vec3 &other) { return add(other); }
   constexpr Vec3 &operator-=(const Vec3 &other) { return subtract(other); }
-  constexpr Vec3 &operator*=(T scalar) { return scale(scalar); }
-  constexpr Vec3 &operator/=(T scalar) { return divide(scalar); }
+  constexpr Vec3 &operator*=(T scalar) { return scaleBy(scalar); }
+  constexpr Vec3 &operator/=(T scalar) { return divideBy(scalar); }
 
   constexpr Vec3 &set(T newX, T newY, T newZ) {
     x = newX;
@@ -638,6 +638,39 @@ template <std::floating_point T> struct Circle {
     return {center, center.distanceTo(pointOnCircle)};
   }
 
+  // Scales about the origin, like scaling every point of the circle.
+  [[nodiscard]]
+  constexpr Circle scaledBy(T scalar) const {
+    return {center * scalar, radius * (scalar < 0 ? -scalar : scalar)};
+  }
+
+  constexpr Circle &scaleBy(T scalar) { return *this = scaledBy(scalar); }
+
+  [[nodiscard]]
+  constexpr Circle operator*(T scalar) const {
+    return scaledBy(scalar);
+  }
+
+  friend constexpr Circle operator*(T scalar, const Circle &circle) {
+    return circle.scaledBy(scalar);
+  }
+
+  constexpr Circle &operator*=(T scalar) { return scaleBy(scalar); }
+
+  [[nodiscard]]
+  constexpr Circle dividedBy(T scalar) const {
+    return {center / scalar, radius / (scalar < 0 ? -scalar : scalar)};
+  }
+
+  constexpr Circle &divideBy(T scalar) { return *this = dividedBy(scalar); }
+
+  [[nodiscard]]
+  constexpr Circle operator/(T scalar) const {
+    return dividedBy(scalar);
+  }
+
+  constexpr Circle &operator/=(T scalar) { return divideBy(scalar); }
+
   [[nodiscard]]
   constexpr bool containsPoint(const Vec2<T> &point) const {
     return center.distanceSquaredTo(point) <= radius * radius;
@@ -665,13 +698,86 @@ template <std::floating_point T> struct LineSegment {
   }
 
   [[nodiscard]]
+  constexpr Vec2<T> direction() const {
+    return end - start;
+  }
+  [[nodiscard]]
+  constexpr Vec2<T> midpoint() const {
+    return (start + end) / 2;
+  }
+
+  [[nodiscard]]
+  constexpr LineSegment scaledFromStartPointBy(T scalar) const {
+    return {start, start + direction() * scalar};
+  }
+
+  constexpr LineSegment &scaleFromStartPointBy(T scalar) {
+    return *this = scaledFromStartPointBy(scalar);
+  }
+
+  [[nodiscard]]
+  constexpr LineSegment scaledFromEndPointBy(T scalar) const {
+    return {end - direction() * scalar, end};
+  }
+
+  constexpr LineSegment &scaleFromEndPointBy(T scalar) {
+    return *this = scaledFromEndPointBy(scalar);
+  }
+
+  [[nodiscard]]
+  constexpr LineSegment scaledFromCenterBy(T scalar) const {
+    const auto center = midpoint();
+    const auto halfDirection = direction() / 2;
+    return {center - halfDirection * scalar, center + halfDirection * scalar};
+  }
+
+  constexpr LineSegment &scaleFromCenterBy(T scalar) {
+    return *this = scaledFromCenterBy(scalar);
+  }
+
+  // Scales about the origin, like scaling every point of the segment.
+  [[nodiscard]]
+  constexpr LineSegment scaledBy(T scalar) const {
+    return {start * scalar, end * scalar};
+  }
+
+  constexpr LineSegment &scaleBy(T scalar) { return *this = scaledBy(scalar); }
+
+  [[nodiscard]]
+  constexpr LineSegment operator*(T scalar) const {
+    return scaledBy(scalar);
+  }
+
+  friend constexpr LineSegment operator*(T scalar, const LineSegment &segment) {
+    return segment.scaledBy(scalar);
+  }
+
+  constexpr LineSegment &operator*=(T scalar) { return scaleBy(scalar); }
+
+  [[nodiscard]]
+  constexpr LineSegment dividedBy(T scalar) const {
+    return {start / scalar, end / scalar};
+  }
+
+  constexpr LineSegment &divideBy(T scalar) {
+    return *this = dividedBy(scalar);
+  }
+
+  [[nodiscard]]
+  constexpr LineSegment operator/(T scalar) const {
+    return dividedBy(scalar);
+  }
+
+  constexpr LineSegment &operator/=(T scalar) { return divideBy(scalar); }
+
+  [[nodiscard]]
   constexpr Vec2<T> closestPointTo(const Vec2<T> &point) const {
-    const auto direction = end - start;
-    const auto lengthSquared = direction.lengthSquared();
+    const auto dir = direction();
+    const auto lengthSquared = dir.lengthSquared();
     if (lengthSquared == 0)
       return start;
-    const auto t = (point - start).dotProductWith(direction) / lengthSquared;
-    return start + direction * std::clamp(t, T{0}, T{1});
+    const auto t = (point - start).dotProductWith(dir) / lengthSquared;
+    return start + dir * std::clamp(t, T{0}, T{1});
   }
 
   [[nodiscard]]
@@ -681,12 +787,12 @@ template <std::floating_point T> struct LineSegment {
 
   [[nodiscard]]
   T distanceTo(const LineSegment &other) const {
-    const auto direction = end - start;
-    const auto otherDirection = other.end - other.start;
-    const auto d1 = direction.crossProductWith(other.start - start);
-    const auto d2 = direction.crossProductWith(other.end - start);
-    const auto d3 = otherDirection.crossProductWith(start - other.start);
-    const auto d4 = otherDirection.crossProductWith(end - other.start);
+    const auto dir = direction();
+    const auto otherDir = other.direction();
+    const auto d1 = dir.crossProductWith(other.start - start);
+    const auto d2 = dir.crossProductWith(other.end - start);
+    const auto d3 = otherDir.crossProductWith(start - other.start);
+    const auto d4 = otherDir.crossProductWith(end - other.start);
     if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
         ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0)))
       return 0;
@@ -744,6 +850,39 @@ template <std::floating_point T> struct Rectangle {
             LineSegment<T>{c[2], c[3]}, LineSegment<T>{c[3], c[0]}};
   }
 
+  // Scales about the origin, like scaling every point of the rectangle.
+  [[nodiscard]]
+  constexpr Rectangle scaledBy(T scalar) const {
+    return fromCorners(min * scalar, max * scalar);
+  }
+
+  constexpr Rectangle &scaleBy(T scalar) { return *this = scaledBy(scalar); }
+
+  [[nodiscard]]
+  constexpr Rectangle operator*(T scalar) const {
+    return scaledBy(scalar);
+  }
+
+  friend constexpr Rectangle operator*(T scalar, const Rectangle &rect) {
+    return rect.scaledBy(scalar);
+  }
+
+  constexpr Rectangle &operator*=(T scalar) { return scaleBy(scalar); }
+
+  [[nodiscard]]
+  constexpr Rectangle dividedBy(T scalar) const {
+    return fromCorners(min / scalar, max / scalar);
+  }
+
+  constexpr Rectangle &divideBy(T scalar) { return *this = dividedBy(scalar); }
+
+  [[nodiscard]]
+  constexpr Rectangle operator/(T scalar) const {
+    return dividedBy(scalar);
+  }
+
+  constexpr Rectangle &operator/=(T scalar) { return divideBy(scalar); }
+
   [[nodiscard]]
   constexpr Vec2<T> closestPointTo(const Vec2<T> &point) const {
     return {std::clamp(point.x, min.x, max.x),
@@ -781,13 +920,46 @@ template <std::floating_point T> struct Triangle {
     return {LineSegment<T>{a, b}, LineSegment<T>{b, c}, LineSegment<T>{c, a}};
   }
 
+  // Scales about the origin, like scaling every point of the triangle.
+  [[nodiscard]]
+  constexpr Triangle scaledBy(T scalar) const {
+    return {a * scalar, b * scalar, c * scalar};
+  }
+
+  constexpr Triangle &scaleBy(T scalar) { return *this = scaledBy(scalar); }
+
+  [[nodiscard]]
+  constexpr Triangle operator*(T scalar) const {
+    return scaledBy(scalar);
+  }
+
+  friend constexpr Triangle operator*(T scalar, const Triangle &triangle) {
+    return triangle.scaledBy(scalar);
+  }
+
+  constexpr Triangle &operator*=(T scalar) { return scaleBy(scalar); }
+
+  [[nodiscard]]
+  constexpr Triangle dividedBy(T scalar) const {
+    return {a / scalar, b / scalar, c / scalar};
+  }
+
+  constexpr Triangle &divideBy(T scalar) { return *this = dividedBy(scalar); }
+
+  [[nodiscard]]
+  constexpr Triangle operator/(T scalar) const {
+    return dividedBy(scalar);
+  }
+
+  constexpr Triangle &operator/=(T scalar) { return divideBy(scalar); }
+
   // Works for either winding.
   [[nodiscard]]
   bool containsPoint(const Vec2<T> &point,
                      T epsilon = defaultEpsilon<T>) const {
     bool hasInside = false, hasOutside = false;
     for (const auto &edge : edges()) {
-      const auto direction = edge.end - edge.start;
+      const auto direction = edge.direction();
       const auto length = direction.length();
       if (length == 0)
         continue;

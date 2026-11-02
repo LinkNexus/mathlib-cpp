@@ -175,8 +175,8 @@ template <class T> void test_vec2_arithmetic() {
 
   TEST_ASSERT(near(a.added(b), {4, -3}), "added");
   TEST_ASSERT(near(a.subtracted(b), {-2, 7}), "subtracted");
-  TEST_ASSERT(near(a.scaled(3), {3, 6}), "scaled");
-  TEST_ASSERT(near(b.divided(2), {T(1.5), T(-2.5)}), "divided");
+  TEST_ASSERT(near(a.scaledBy(T(3)), {3, 6}), "scaledBy scalar");
+  TEST_ASSERT(near(b.dividedBy(2), {T(1.5), T(-2.5)}), "dividedBy");
   TEST_ASSERT(near(a.scaledBy(b), {3, -10}), "scaledBy");
 
   TEST_ASSERT(near(a + b, {4, -3}), "operator+");
@@ -194,8 +194,8 @@ template <class T> void test_vec2_mutation() {
 
   TEST_ASSERT(&v.add({1, 1}) == &v && near(v, {2, 3}), "add");
   TEST_ASSERT(&v.subtract({1, 1}) == &v && near(v, {1, 2}), "subtract");
-  TEST_ASSERT(&v.scale(4) == &v && near(v, {4, 8}), "scale");
-  TEST_ASSERT(&v.divide(2) == &v && near(v, {2, 4}), "divide");
+  TEST_ASSERT(&v.scaleBy(T(4)) == &v && near(v, {4, 8}), "scaleBy scalar");
+  TEST_ASSERT(&v.divideBy(2) == &v && near(v, {2, 4}), "divideBy");
   TEST_ASSERT(&v.scaleBy({2, -1}) == &v && near(v, {4, -4}), "scaleBy");
   v.set(2, 4);
 
@@ -204,7 +204,7 @@ template <class T> void test_vec2_mutation() {
   TEST_ASSERT(&(v *= T(2)) == &v && near(v, {4, 8}), "operator*=");
   TEST_ASSERT(&(v /= T(4)) == &v && near(v, {1, 2}), "operator/=");
 
-  v.add({1, 0}).scale(2);
+  v.add({1, 0}).scaleBy(2);
   TEST_ASSERT(near(v, {4, 4}), "chaining");
   v += v;
   TEST_ASSERT(near(v, {8, 8}), "self-aliasing add");
@@ -481,8 +481,8 @@ template <class T> void test_vec3_arithmetic() {
   Vec3<T> v = a;
   TEST_ASSERT(&v.add(b) == &v && near(v, {5, -3, 9}), "add");
   TEST_ASSERT(&v.subtract(b) == &v && near(v, a), "subtract");
-  TEST_ASSERT(&v.scale(2) == &v && near(v, {2, 4, 6}), "scale");
-  TEST_ASSERT(&v.divide(2) == &v && near(v, a), "divide");
+  TEST_ASSERT(&v.scaleBy(T(2)) == &v && near(v, {2, 4, 6}), "scaleBy scalar");
+  TEST_ASSERT(&v.divideBy(2) == &v && near(v, a), "divideBy");
   TEST_ASSERT(&v.scaleBy(b) == &v && near(v, {4, -10, 18}), "scaleBy");
   v = a;
   TEST_ASSERT(&(v += b) == &v && near(v, {5, -3, 9}), "operator+=");
@@ -950,6 +950,96 @@ template <class T> void test_shape_factories() {
   TEST_ASSERT(near(r.a.y, T(0)) && r.a.x < 0, "equilateral rotation");
 }
 
+template <class T> void test_shape_transforms() {
+  TEST_SUITE("shape transforms");
+  using C = mathlib::Circle<T>;
+  using R = mathlib::Rectangle<T>;
+  using L = mathlib::LineSegment<T>;
+  using Tri = mathlib::Triangle<T>;
+
+  const L s{{1, 1}, {5, 3}};
+  TEST_ASSERT(near(s.direction(), {4, 2}), "direction");
+  TEST_ASSERT(near(s.midpoint(), {3, 2}), "midpoint");
+  const L fs = s.scaledFromStartPointBy(2);
+  TEST_ASSERT(near(fs.start, {1, 1}) && near(fs.end, {9, 5}),
+              "scaledFromStartPointBy");
+  const L fe = s.scaledFromEndPointBy(2);
+  TEST_ASSERT(near(fe.start, {-3, -1}) && near(fe.end, {5, 3}),
+              "scaledFromEndPointBy");
+  const L fc = s.scaledFromCenterBy(2);
+  TEST_ASSERT(near(fc.start, {-1, 0}) && near(fc.end, {7, 4}),
+              "scaledFromCenterBy");
+  TEST_ASSERT(near(s.scaledFromCenterBy(T(0.5)).midpoint(), s.midpoint()),
+              "scaledFromCenterBy keeps the midpoint");
+  L m = s;
+  TEST_ASSERT(&m.scaleFromStartPointBy(2) == &m && near(m.end, {9, 5}),
+              "scaleFromStartPointBy");
+  m = s;
+  TEST_ASSERT(&m.scaleFromEndPointBy(2) == &m && near(m.start, {-3, -1}),
+              "scaleFromEndPointBy");
+  m = s;
+  TEST_ASSERT(&m.scaleFromCenterBy(2) == &m && near(m.start, {-1, 0}),
+              "scaleFromCenterBy");
+
+  const L s2 = s * T(2);
+  TEST_ASSERT(near(s2.start, {2, 2}) && near(s2.end, {10, 6}),
+              "segment * scalar");
+  TEST_ASSERT(near((T(2) * s).end, s2.end), "scalar * segment");
+  TEST_ASSERT(near((s2 / T(2)).end, s.end), "segment / scalar");
+  m = s;
+  m *= T(2);
+  TEST_ASSERT(near(m.end, s2.end), "segment *=");
+  m /= T(2);
+  TEST_ASSERT(near(m.end, s.end), "segment /=");
+
+  const C c{{1, 2}, 3};
+  const C c2 = c * T(2);
+  TEST_ASSERT(near(c2.center, {2, 4}) && near(c2.radius, T(6)),
+              "circle * scalar");
+  const C cn = c * T(-2);
+  TEST_ASSERT(near(cn.center, {-2, -4}) && near(cn.radius, T(6)),
+              "negative scale keeps radius positive");
+  TEST_ASSERT(near((T(2) * c).radius, T(6)), "scalar * circle");
+  TEST_ASSERT(near((c2 / T(2)).radius, T(3)) && near((c / T(-1)).radius, T(3)),
+              "circle / scalar");
+  C cm = c;
+  cm *= T(2);
+  TEST_ASSERT(near(cm.radius, T(6)), "circle *=");
+  cm /= T(2);
+  TEST_ASSERT(near(cm.radius, T(3)), "circle /=");
+
+  const R r{{1, 2}, {3, 4}};
+  const R r2 = r * T(2);
+  TEST_ASSERT(near(r2.min, {2, 4}) && near(r2.max, {6, 8}), "rect * scalar");
+  const R rn = r * T(-1);
+  TEST_ASSERT(near(rn.min, {-3, -4}) && near(rn.max, {-1, -2}),
+              "negative scale keeps min <= max");
+  TEST_ASSERT(near((T(2) * r).max, r2.max), "scalar * rect");
+  TEST_ASSERT(near((r2 / T(2)).max, r.max), "rect / scalar");
+  TEST_ASSERT(near((r / T(-1)).min, {-3, -4}),
+              "negative divide keeps min <= max");
+  R rm = r;
+  TEST_ASSERT(&rm.scaleBy(2) == &rm && near(rm.max, r2.max), "rect scaleBy");
+  TEST_ASSERT(&rm.divideBy(2) == &rm && near(rm.max, r.max), "rect divideBy");
+  rm *= T(2);
+  TEST_ASSERT(near(rm.max, r2.max), "rect *=");
+  rm /= T(2);
+  TEST_ASSERT(near(rm.max, r.max), "rect /=");
+
+  const Tri t{{0, 0}, {2, 0}, {0, 2}};
+  const Tri t2 = t * T(3);
+  TEST_ASSERT(near(t2.b, {6, 0}) && near(t2.c, {0, 6}), "triangle * scalar");
+  TEST_ASSERT(near((T(3) * t).b, t2.b), "scalar * triangle");
+  TEST_ASSERT(near((t2 / T(3)).b, t.b), "triangle / scalar");
+  Tri tm = t;
+  TEST_ASSERT(&tm.scaleBy(3) == &tm && near(tm.b, t2.b), "triangle scaleBy");
+  TEST_ASSERT(&tm.divideBy(3) == &tm && near(tm.b, t.b), "triangle divideBy");
+  tm *= T(3);
+  TEST_ASSERT(near(tm.b, t2.b), "triangle *=");
+  tm /= T(3);
+  TEST_ASSERT(near(tm.b, t.b), "triangle /=");
+}
+
 template <class T> void test_shape_output() {
   TEST_SUITE("shape output");
   TEST_ASSERT(std::format("{}", mathlib::Circle<T>{{1, 2}, 3}) ==
@@ -1018,6 +1108,7 @@ template <class T> void run_all(const char *type) {
   test_triangle<T>();
   test_intersects_symmetry<T>();
   test_shape_factories<T>();
+  test_shape_transforms<T>();
   test_shape_output<T>();
 }
 
