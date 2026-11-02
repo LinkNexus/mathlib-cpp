@@ -626,6 +626,18 @@ template <std::floating_point T> struct Circle {
   Vec2<T> center;
   T radius{};
 
+  // a and b are opposite ends of a diameter.
+  [[nodiscard]]
+  static Circle fromDiameter(const Vec2<T> &a, const Vec2<T> &b) {
+    return {a.lerpedWith(b, T{0.5}), a.distanceTo(b) / 2};
+  }
+
+  [[nodiscard]]
+  static Circle fromCenterAndPoint(const Vec2<T> &center,
+                                   const Vec2<T> &pointOnCircle) {
+    return {center, center.distanceTo(pointOnCircle)};
+  }
+
   [[nodiscard]]
   constexpr bool containsPoint(const Vec2<T> &point) const {
     return center.distanceSquaredTo(point) <= radius * radius;
@@ -640,6 +652,17 @@ template <std::floating_point T> struct Circle {
 template <std::floating_point T> struct LineSegment {
   Vec2<T> start;
   Vec2<T> end;
+
+  [[nodiscard]]
+  static constexpr LineSegment fromStartAndDirection(const Vec2<T> &start,
+                                                     const Vec2<T> &direction) {
+    return {start, start + direction};
+  }
+
+  [[nodiscard]]
+  static LineSegment fromAngle(const Vec2<T> &start, T angle, T length) {
+    return {start, start + Vec2<T>::fromAngle(angle, length)};
+  }
 
   [[nodiscard]]
   constexpr Vec2<T> closestPointTo(const Vec2<T> &point) const {
@@ -683,10 +706,31 @@ template <std::floating_point T> struct LineSegment {
   }
 };
 
-// Expects min <= max on both axes.
+// Expects min <= max on both axes; the factories below guarantee it.
 template <std::floating_point T> struct Rectangle {
   Vec2<T> min;
   Vec2<T> max;
+
+  // a and b are any two opposite corners.
+  [[nodiscard]]
+  static constexpr Rectangle fromCorners(const Vec2<T> &a, const Vec2<T> &b) {
+    return {{std::min(a.x, b.x), std::min(a.y, b.y)},
+            {std::max(a.x, b.x), std::max(a.y, b.y)}};
+  }
+
+  // A negative width or height extends from min towards -x or -y.
+  [[nodiscard]]
+  static constexpr Rectangle fromMinAndSize(const Vec2<T> &min, T width,
+                                            T height) {
+    return fromCorners(min, {min.x + width, min.y + height});
+  }
+
+  [[nodiscard]]
+  static constexpr Rectangle fromCenterAndSize(const Vec2<T> &center, T width,
+                                               T height) {
+    const Vec2<T> halfSize(width / 2, height / 2);
+    return fromCorners(center - halfSize, center + halfSize);
+  }
 
   [[nodiscard]]
   constexpr std::array<Vec2<T>, 4> corners() const {
@@ -719,6 +763,18 @@ template <std::floating_point T> struct Rectangle {
 
 template <std::floating_point T> struct Triangle {
   Vec2<T> a, b, c;
+
+  // With rotation 0 the first vertex points up (+y) from center.
+  [[nodiscard]]
+  static Triangle equilateral(const Vec2<T> &center, T sideLength,
+                              T rotation = 0) {
+    const auto circumradius = sideLength / std::numbers::sqrt3_v<T>;
+    const auto first = std::numbers::pi_v<T> / 2 + rotation;
+    const auto step = 2 * std::numbers::pi_v<T> / 3;
+    return {center + Vec2<T>::fromAngle(first, circumradius),
+            center + Vec2<T>::fromAngle(first + step, circumradius),
+            center + Vec2<T>::fromAngle(first + 2 * step, circumradius)};
+  }
 
   [[nodiscard]]
   constexpr std::array<LineSegment<T>, 3> edges() const {

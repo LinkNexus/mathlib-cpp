@@ -901,6 +901,55 @@ template <class T> void test_intersects_symmetry() {
   TEST_ASSERT(symmetric, "intersects(a, b) == intersects(b, a)");
 }
 
+template <class T> void test_shape_factories() {
+  TEST_SUITE("shape factories");
+  using C = mathlib::Circle<T>;
+  using R = mathlib::Rectangle<T>;
+  using L = mathlib::LineSegment<T>;
+  using Tri = mathlib::Triangle<T>;
+  constexpr T pi = std::numbers::pi_v<T>;
+
+  const C d = C::fromDiameter({0, 0}, {4, 0});
+  TEST_ASSERT(near(d.center, {2, 0}) && near(d.radius, T(2)), "fromDiameter");
+  const C p = C::fromCenterAndPoint({1, 1}, {4, 5});
+  TEST_ASSERT(near(p.center, {1, 1}) && near(p.radius, T(5)),
+              "fromCenterAndPoint");
+  TEST_ASSERT(p.containsPoint({4, 5}), "fromCenterAndPoint passes the point");
+
+  const R a = R::fromMinAndSize({1, 2}, 3, 4);
+  TEST_ASSERT(near(a.min, {1, 2}) && near(a.max, {4, 6}), "fromMinAndSize");
+  const R neg = R::fromMinAndSize({1, 2}, -3, -4);
+  TEST_ASSERT(near(neg.min, {-2, -2}) && near(neg.max, {1, 2}),
+              "fromMinAndSize with negative size");
+  const R c = R::fromCenterAndSize({0, 0}, 4, 2);
+  TEST_ASSERT(near(c.min, {-2, -1}) && near(c.max, {2, 1}),
+              "fromCenterAndSize");
+  const R cneg = R::fromCenterAndSize({0, 0}, -4, -2);
+  TEST_ASSERT(near(cneg.min, {-2, -1}) && near(cneg.max, {2, 1}),
+              "fromCenterAndSize with negative size");
+  const R k = R::fromCorners({3, 1}, {1, 4});
+  TEST_ASSERT(near(k.min, {1, 1}) && near(k.max, {3, 4}),
+              "fromCorners orders the corners");
+  static_assert(R::fromMinAndSize({0, 0}, 1, 1).max.x == 1);
+  static_assert(R::fromCenterAndSize({0, 0}, 2, 2).min.x == -1);
+
+  const L sd = L::fromStartAndDirection({1, 1}, {2, -1});
+  TEST_ASSERT(near(sd.start, {1, 1}) && near(sd.end, {3, 0}),
+              "fromStartAndDirection");
+  const L sa = L::fromAngle({1, 1}, pi / 2, 3);
+  TEST_ASSERT(near(sa.start, {1, 1}) && near(sa.end, {1, 4}), "fromAngle");
+
+  const Tri e = Tri::equilateral({1, 2}, 3);
+  TEST_ASSERT(near(e.a.distanceTo(e.b), T(3)) &&
+                  near(e.b.distanceTo(e.c), T(3)) &&
+                  near(e.c.distanceTo(e.a), T(3)),
+              "equilateral sides");
+  TEST_ASSERT(near((e.a + e.b + e.c) / T(3), {1, 2}), "equilateral center");
+  TEST_ASSERT(near(e.a.x, T(1)) && e.a.y > 2, "equilateral points up");
+  const Tri r = Tri::equilateral({0, 0}, 3, pi / 2);
+  TEST_ASSERT(near(r.a.y, T(0)) && r.a.x < 0, "equilateral rotation");
+}
+
 template <class T> void test_shape_output() {
   TEST_SUITE("shape output");
   TEST_ASSERT(std::format("{}", mathlib::Circle<T>{{1, 2}, 3}) ==
@@ -968,6 +1017,7 @@ template <class T> void run_all(const char *type) {
   test_line_segment<T>();
   test_triangle<T>();
   test_intersects_symmetry<T>();
+  test_shape_factories<T>();
   test_shape_output<T>();
 }
 
