@@ -7,10 +7,19 @@
 #include <concepts>
 #include <cstddef>
 #include <format>
+#include <numbers>
 #include <ostream>
 
-// All angles used in this library are in radians.
 namespace mathlib {
+template <std::floating_point T> T toRadians(T degrees) {
+  return degrees * static_cast<T>(std::numbers::pi_v<T> / 180);
+}
+
+template <std::floating_point T> T toDegrees(T radians) {
+  return radians * static_cast<T>(180 / std::numbers::pi_v<T>);
+}
+
+// All angles used in the following vector structs are in radians.
 template <std::floating_point T> struct Vec2 {
   T x{}, y{};
 
@@ -58,9 +67,7 @@ template <std::floating_point T> struct Vec2 {
   }
   constexpr Vec2 &scale(T scalar) { return *this = scaled(scalar); }
   constexpr Vec2 &divide(T scalar) { return *this = divided(scalar); }
-  constexpr Vec2 &scaleBy(const Vec2 &other) {
-    return *this = scaledBy(other);
-  }
+  constexpr Vec2 &scaleBy(const Vec2 &other) { return *this = scaledBy(other); }
 
   [[nodiscard]]
   constexpr Vec2 operator+(const Vec2 &other) const {
@@ -279,8 +286,7 @@ template <std::floating_point T> struct Vec2 {
   // orthogonal to everything.
   [[nodiscard]]
   bool isOrthogonalTo(const Vec2 &other, T epsilon) const {
-    return std::abs(normalized().dotProductWith(other.normalized())) <=
-           epsilon;
+    return std::abs(normalized().dotProductWith(other.normalized())) <= epsilon;
   }
 
   friend std::ostream &operator<<(std::ostream &os, const Vec2 &vec) {
@@ -345,9 +351,7 @@ template <std::floating_point T> struct Vec3 {
   }
   constexpr Vec3 &scale(T scalar) { return *this = scaled(scalar); }
   constexpr Vec3 &divide(T scalar) { return *this = divided(scalar); }
-  constexpr Vec3 &scaleBy(const Vec3 &other) {
-    return *this = scaledBy(other);
-  }
+  constexpr Vec3 &scaleBy(const Vec3 &other) { return *this = scaledBy(other); }
 
   [[nodiscard]]
   constexpr Vec3 operator+(const Vec3 &other) const {
@@ -592,8 +596,7 @@ template <std::floating_point T> struct Vec3 {
   // orthogonal to everything.
   [[nodiscard]]
   bool isOrthogonalTo(const Vec3 &other, T epsilon) const {
-    return std::abs(normalized().dotProductWith(other.normalized())) <=
-           epsilon;
+    return std::abs(normalized().dotProductWith(other.normalized())) <= epsilon;
   }
 
   friend std::ostream &operator<<(std::ostream &os, const Vec3 &vec) {
