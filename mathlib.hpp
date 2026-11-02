@@ -638,6 +638,26 @@ template <std::floating_point T> struct Circle {
     return {center, center.distanceTo(pointOnCircle)};
   }
 
+  // Scales about point, like scaling every point of the circle.
+  [[nodiscard]]
+  constexpr Circle scaledFromPointBy(const Vec2<T> &point, T scalar) const {
+    return {point + (center - point) * scalar,
+            radius * (scalar < 0 ? -scalar : scalar)};
+  }
+
+  constexpr Circle &scaleFromPointBy(const Vec2<T> &point, T scalar) {
+    return *this = scaledFromPointBy(point, scalar);
+  }
+
+  [[nodiscard]]
+  constexpr Circle scaledFromCenterBy(T scalar) const {
+    return scaledFromPointBy(center, scalar);
+  }
+
+  constexpr Circle &scaleFromCenterBy(T scalar) {
+    return *this = scaledFromCenterBy(scalar);
+  }
+
   // Scales about the origin, like scaling every point of the circle.
   [[nodiscard]]
   constexpr Circle scaledBy(T scalar) const {
@@ -706,9 +726,20 @@ template <std::floating_point T> struct LineSegment {
     return (start + end) / 2;
   }
 
+  // Scales about point, like scaling every point of the segment.
+  [[nodiscard]]
+  constexpr LineSegment scaledFromPointBy(const Vec2<T> &point,
+                                          T scalar) const {
+    return {point + (start - point) * scalar, point + (end - point) * scalar};
+  }
+
+  constexpr LineSegment &scaleFromPointBy(const Vec2<T> &point, T scalar) {
+    return *this = scaledFromPointBy(point, scalar);
+  }
+
   [[nodiscard]]
   constexpr LineSegment scaledFromStartPointBy(T scalar) const {
-    return {start, start + direction() * scalar};
+    return scaledFromPointBy(start, scalar);
   }
 
   constexpr LineSegment &scaleFromStartPointBy(T scalar) {
@@ -717,7 +748,7 @@ template <std::floating_point T> struct LineSegment {
 
   [[nodiscard]]
   constexpr LineSegment scaledFromEndPointBy(T scalar) const {
-    return {end - direction() * scalar, end};
+    return scaledFromPointBy(end, scalar);
   }
 
   constexpr LineSegment &scaleFromEndPointBy(T scalar) {
@@ -726,9 +757,7 @@ template <std::floating_point T> struct LineSegment {
 
   [[nodiscard]]
   constexpr LineSegment scaledFromCenterBy(T scalar) const {
-    const auto center = midpoint();
-    const auto halfDirection = direction() / 2;
-    return {center - halfDirection * scalar, center + halfDirection * scalar};
+    return scaledFromPointBy(midpoint(), scalar);
   }
 
   constexpr LineSegment &scaleFromCenterBy(T scalar) {
@@ -850,6 +879,49 @@ template <std::floating_point T> struct Rectangle {
             LineSegment<T>{c[2], c[3]}, LineSegment<T>{c[3], c[0]}};
   }
 
+  [[nodiscard]]
+  constexpr Vec2<T> center() const {
+    return (min + max) / 2;
+  }
+
+  // Scales about point, like scaling every point of the rectangle.
+  [[nodiscard]]
+  constexpr Rectangle scaledFromPointBy(const Vec2<T> &point, T scalar) const {
+    return fromCorners(point + (min - point) * scalar,
+                       point + (max - point) * scalar);
+  }
+
+  constexpr Rectangle &scaleFromPointBy(const Vec2<T> &point, T scalar) {
+    return *this = scaledFromPointBy(point, scalar);
+  }
+
+  [[nodiscard]]
+  constexpr Rectangle scaledFromCenterBy(T scalar) const {
+    return scaledFromPointBy(center(), scalar);
+  }
+
+  constexpr Rectangle &scaleFromCenterBy(T scalar) {
+    return *this = scaledFromCenterBy(scalar);
+  }
+
+  [[nodiscard]]
+  constexpr Rectangle scaledFromMinBy(T scalar) const {
+    return scaledFromPointBy(min, scalar);
+  }
+
+  constexpr Rectangle &scaleFromMinBy(T scalar) {
+    return *this = scaledFromMinBy(scalar);
+  }
+
+  [[nodiscard]]
+  constexpr Rectangle scaledFromMaxBy(T scalar) const {
+    return scaledFromPointBy(max, scalar);
+  }
+
+  constexpr Rectangle &scaleFromMaxBy(T scalar) {
+    return *this = scaledFromMaxBy(scalar);
+  }
+
   // Scales about the origin, like scaling every point of the rectangle.
   [[nodiscard]]
   constexpr Rectangle scaledBy(T scalar) const {
@@ -918,6 +990,31 @@ template <std::floating_point T> struct Triangle {
   [[nodiscard]]
   constexpr std::array<LineSegment<T>, 3> edges() const {
     return {LineSegment<T>{a, b}, LineSegment<T>{b, c}, LineSegment<T>{c, a}};
+  }
+
+  [[nodiscard]]
+  constexpr Vec2<T> centroid() const {
+    return (a + b + c) / 3;
+  }
+
+  // Scales about point, like scaling every point of the triangle.
+  [[nodiscard]]
+  constexpr Triangle scaledFromPointBy(const Vec2<T> &point, T scalar) const {
+    return {point + (a - point) * scalar, point + (b - point) * scalar,
+            point + (c - point) * scalar};
+  }
+
+  constexpr Triangle &scaleFromPointBy(const Vec2<T> &point, T scalar) {
+    return *this = scaledFromPointBy(point, scalar);
+  }
+
+  [[nodiscard]]
+  constexpr Triangle scaledFromCentroidBy(T scalar) const {
+    return scaledFromPointBy(centroid(), scalar);
+  }
+
+  constexpr Triangle &scaleFromCentroidBy(T scalar) {
+    return *this = scaledFromCentroidBy(scalar);
   }
 
   // Scales about the origin, like scaling every point of the triangle.

@@ -1040,6 +1040,88 @@ template <class T> void test_shape_transforms() {
   TEST_ASSERT(near(tm.b, t.b), "triangle /=");
 }
 
+template <class T> void test_anchored_scaling() {
+  TEST_SUITE("anchored scaling");
+  using C = mathlib::Circle<T>;
+  using R = mathlib::Rectangle<T>;
+  using L = mathlib::LineSegment<T>;
+  using Tri = mathlib::Triangle<T>;
+  const Vec2<T> pivot(1, 1);
+
+  const C c{{3, 1}, 2};
+  const C cp = c.scaledFromPointBy(pivot, 2);
+  TEST_ASSERT(near(cp.center, {5, 1}) && near(cp.radius, T(4)),
+              "circle scaledFromPointBy");
+  TEST_ASSERT(near(c.scaledFromPointBy({0, 0}, 3).center, (c * T(3)).center),
+              "circle from origin matches scaledBy");
+  const C cc = c.scaledFromCenterBy(-2);
+  TEST_ASSERT(near(cc.center, c.center) && near(cc.radius, T(4)),
+              "circle scaledFromCenterBy");
+  C cm = c;
+  TEST_ASSERT(&cm.scaleFromCenterBy(2) == &cm && near(cm.radius, T(4)),
+              "circle scaleFromCenterBy");
+  cm = c;
+  TEST_ASSERT(&cm.scaleFromPointBy(pivot, 2) == &cm && near(cm.center, {5, 1}),
+              "circle scaleFromPointBy");
+
+  const L s{{2, 1}, {4, 3}};
+  const L sp = s.scaledFromPointBy(pivot, 2);
+  TEST_ASSERT(near(sp.start, {3, 1}) && near(sp.end, {7, 5}),
+              "segment scaledFromPointBy");
+  L sm = s;
+  TEST_ASSERT(&sm.scaleFromPointBy(pivot, 2) == &sm && near(sm.end, {7, 5}),
+              "segment scaleFromPointBy");
+
+  const R r{{1, 1}, {3, 5}};
+  TEST_ASSERT(near(r.center(), {2, 3}), "rect center");
+  const R rc = r.scaledFromCenterBy(2);
+  TEST_ASSERT(near(rc.min, {0, -1}) && near(rc.max, {4, 7}),
+              "rect scaledFromCenterBy");
+  const R rmin = r.scaledFromMinBy(2);
+  TEST_ASSERT(near(rmin.min, {1, 1}) && near(rmin.max, {5, 9}),
+              "rect scaledFromMinBy");
+  const R rmax = r.scaledFromMaxBy(2);
+  TEST_ASSERT(near(rmax.min, {-1, -3}) && near(rmax.max, {3, 5}),
+              "rect scaledFromMaxBy");
+  const R rp = r.scaledFromPointBy({3, 1}, T(0.5));
+  TEST_ASSERT(near(rp.min, {2, 1}) && near(rp.max, {3, 3}),
+              "rect scaledFromPointBy other corner");
+  const R rneg = r.scaledFromCenterBy(-1);
+  TEST_ASSERT(near(rneg.min, r.min) && near(rneg.max, r.max),
+              "rect negative scale keeps min <= max");
+  R rm = r;
+  TEST_ASSERT(&rm.scaleFromCenterBy(2) == &rm && near(rm.max, rc.max),
+              "rect scaleFromCenterBy");
+  rm = r;
+  TEST_ASSERT(&rm.scaleFromMinBy(2) == &rm && near(rm.max, rmin.max),
+              "rect scaleFromMinBy");
+  rm = r;
+  TEST_ASSERT(&rm.scaleFromMaxBy(2) == &rm && near(rm.min, rmax.min),
+              "rect scaleFromMaxBy");
+  rm = r;
+  TEST_ASSERT(&rm.scaleFromPointBy({3, 1}, T(0.5)) == &rm &&
+                  near(rm.min, rp.min),
+              "rect scaleFromPointBy");
+
+  const Tri t{{0, 0}, {3, 0}, {0, 3}};
+  TEST_ASSERT(near(t.centroid(), {1, 1}), "triangle centroid");
+  const Tri tc = t.scaledFromCentroidBy(2);
+  TEST_ASSERT(near(tc.a, {-1, -1}) && near(tc.b, {5, -1}) &&
+                  near(tc.c, {-1, 5}),
+              "triangle scaledFromCentroidBy");
+  TEST_ASSERT(near(tc.centroid(), t.centroid()),
+              "scaledFromCentroidBy keeps the centroid");
+  const Tri ta = t.scaledFromPointBy(t.a, 2);
+  TEST_ASSERT(near(ta.a, t.a) && near(ta.b, {6, 0}) && near(ta.c, {0, 6}),
+              "triangle scaledFromPointBy vertex");
+  Tri tm = t;
+  TEST_ASSERT(&tm.scaleFromCentroidBy(2) == &tm && near(tm.b, tc.b),
+              "triangle scaleFromCentroidBy");
+  tm = t;
+  TEST_ASSERT(&tm.scaleFromPointBy(t.a, 2) == &tm && near(tm.b, ta.b),
+              "triangle scaleFromPointBy");
+}
+
 template <class T> void test_shape_output() {
   TEST_SUITE("shape output");
   TEST_ASSERT(std::format("{}", mathlib::Circle<T>{{1, 2}, 3}) ==
@@ -1109,6 +1191,7 @@ template <class T> void run_all(const char *type) {
   test_intersects_symmetry<T>();
   test_shape_factories<T>();
   test_shape_transforms<T>();
+  test_anchored_scaling<T>();
   test_shape_output<T>();
 }
 
