@@ -1,22 +1,26 @@
 #ifndef MATHLIB_HPP
 #define MATHLIB_HPP
 
+#include <algorithm>
 #include <array>
 #include <cassert>
 #include <cmath>
 #include <concepts>
 #include <cstddef>
 #include <format>
+#include <limits>
 #include <numbers>
 #include <ostream>
 
 namespace mathlib {
-template <std::floating_point T> T toRadians(T degrees) {
-  return degrees * static_cast<T>(std::numbers::pi_v<T> / 180);
+template <std::floating_point T>
+[[nodiscard]] constexpr T toRadians(T degrees) {
+  return degrees * (std::numbers::pi_v<T> / 180);
 }
 
-template <std::floating_point T> T toDegrees(T radians) {
-  return radians * static_cast<T>(180 / std::numbers::pi_v<T>);
+template <std::floating_point T>
+[[nodiscard]] constexpr T toDegrees(T radians) {
+  return radians * (180 / std::numbers::pi_v<T>);
 }
 
 // All angles used in the following vector structs are in radians.
@@ -610,6 +614,281 @@ static_assert(sizeof(Vec3<double>) == 3 * sizeof(double));
 using Vec3f = Vec3<float>;
 using Vec3d = Vec3<double>;
 
+// Shapes are closed: points on the boundary are contained, and shapes that
+// only touch intersect.
+
+// Absolute distance tolerance for predicates that would otherwise depend on
+// exact floating-point equality.
+template <std::floating_point T>
+inline constexpr T defaultEpsilon = std::numeric_limits<T>::epsilon() * 1024;
+
+template <std::floating_point T> struct Circle {
+  Vec2<T> center;
+  T radius{};
+
+  [[nodiscard]]
+  constexpr bool containsPoint(const Vec2<T> &point) const {
+    return center.distanceSquaredTo(point) <= radius * radius;
+  }
+
+  friend std::ostream &operator<<(std::ostream &os, const Circle &c) {
+    return os << "Circle(center: " << c.center << ", radius: " << c.radius
+              << ")";
+  }
+};
+
+template <std::floating_point T> struct LineSegment {
+  Vec2<T> start;
+  Vec2<T> end;
+
+  [[nodiscard]]
+  constexpr Vec2<T> closestPointTo(const Vec2<T> &point) const {
+    const auto direction = end - start;
+    const auto lengthSquared = direction.lengthSquared();
+    if (lengthSquared == 0)
+      return start;
+    const auto t = (point - start).dotProductWith(direction) / lengthSquared;
+    return start + direction * std::clamp(t, T{0}, T{1});
+  }
+
+  [[nodiscard]]
+  T distanceTo(const Vec2<T> &point) const {
+    return closestPointTo(point).distanceTo(point);
+  }
+
+  [[nodiscard]]
+  T distanceTo(const LineSegment &other) const {
+    const auto direction = end - start;
+    const auto otherDirection = other.end - other.start;
+    const auto d1 = direction.crossProductWith(other.start - start);
+    const auto d2 = direction.crossProductWith(other.end - start);
+    const auto d3 = otherDirection.crossProductWith(start - other.start);
+    const auto d4 = otherDirection.crossProductWith(end - other.start);
+    if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
+        ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0)))
+      return 0;
+
+    return std::min({distanceTo(other.start), distanceTo(other.end),
+                     other.distanceTo(start), other.distanceTo(end)});
+  }
+
+  [[nodiscard]]
+  bool containsPoint(const Vec2<T> &point,
+                     T epsilon = defaultEpsilon<T>) const {
+    return distanceTo(point) <= epsilon;
+  }
+
+  friend std::ostream &operator<<(std::ostream &os, const LineSegment &l) {
+    return os << "LineSegment(start: " << l.start << ", end: " << l.end << ")";
+  }
+};
+
+// Expects min <= max on both axes.
+template <std::floating_point T> struct Rectangle {
+  Vec2<T> min;
+  Vec2<T> max;
+
+  [[nodiscard]]
+  constexpr std::array<Vec2<T>, 4> corners() const {
+    return {min, Vec2<T>(max.x, min.y), max, Vec2<T>(min.x, max.y)};
+  }
+
+  [[nodiscard]]
+  constexpr std::array<LineSegment<T>, 4> edges() const {
+    const auto c = corners();
+    return {LineSegment<T>{c[0], c[1]}, LineSegment<T>{c[1], c[2]},
+            LineSegment<T>{c[2], c[3]}, LineSegment<T>{c[3], c[0]}};
+  }
+
+  [[nodiscard]]
+  constexpr Vec2<T> closestPointTo(const Vec2<T> &point) const {
+    return {std::clamp(point.x, min.x, max.x),
+            std::clamp(point.y, min.y, max.y)};
+  }
+
+  [[nodiscard]]
+  constexpr bool containsPoint(const Vec2<T> &point) const {
+    return point.x >= min.x && point.x <= max.x && point.y >= min.y &&
+           point.y <= max.y;
+  }
+
+  friend std::ostream &operator<<(std::ostream &os, const Rectangle &r) {
+    return os << "Rectangle(min: " << r.min << ", max: " << r.max << ")";
+  }
+};
+
+template <std::floating_point T> struct Triangle {
+  Vec2<T> a, b, c;
+
+  [[nodiscard]]
+  constexpr std::array<LineSegment<T>, 3> edges() const {
+    return {LineSegment<T>{a, b}, LineSegment<T>{b, c}, LineSegment<T>{c, a}};
+  }
+
+  // Works for either winding.
+  [[nodiscard]]
+  bool containsPoint(const Vec2<T> &point,
+                     T epsilon = defaultEpsilon<T>) const {
+    bool hasInside = false, hasOutside = false;
+    for (const auto &edge : edges()) {
+      const auto direction = edge.end - edge.start;
+      const auto length = direction.length();
+      if (length == 0)
+        continue;
+      const auto signedDistance =
+          direction.crossProductWith(point - edge.start) / length;
+      hasInside |= signedDistance > epsilon;
+      hasOutside |= signedDistance < -epsilon;
+    }
+    if (hasInside && hasOutside)
+      return false;
+    if (hasInside || hasOutside)
+      return true;
+    // Every edge is within epsilon: the triangle is degenerate or the point is
+    // a vertex.
+    for (const auto &edge : edges())
+      if (edge.containsPoint(point, epsilon))
+        return true;
+    return false;
+  }
+
+  friend std::ostream &operator<<(std::ostream &os, const Triangle &t) {
+    return os << "Triangle(a: " << t.a << ", b: " << t.b << ", c: " << t.c
+              << ")";
+  }
+};
+
+// intersects(a, b) is defined for every pair of shapes, in both orders.
+
+template <std::floating_point T>
+[[nodiscard]] constexpr bool intersects(const Circle<T> &a,
+                                        const Circle<T> &b) {
+  const auto radii = a.radius + b.radius;
+  return a.center.distanceSquaredTo(b.center) <= radii * radii;
+}
+
+template <std::floating_point T>
+[[nodiscard]] constexpr bool intersects(const Rectangle<T> &a,
+                                        const Rectangle<T> &b) {
+  return a.min.x <= b.max.x && a.max.x >= b.min.x && a.min.y <= b.max.y &&
+         a.max.y >= b.min.y;
+}
+
+template <std::floating_point T>
+[[nodiscard]] bool intersects(const LineSegment<T> &a, const LineSegment<T> &b,
+                              T epsilon = defaultEpsilon<T>) {
+  return a.distanceTo(b) <= epsilon;
+}
+
+template <std::floating_point T>
+[[nodiscard]] constexpr bool intersects(const Rectangle<T> &rect,
+                                        const Circle<T> &circle) {
+  return circle.containsPoint(rect.closestPointTo(circle.center));
+}
+
+template <std::floating_point T>
+[[nodiscard]] bool intersects(const LineSegment<T> &segment,
+                              const Circle<T> &circle) {
+  return circle.containsPoint(segment.closestPointTo(circle.center));
+}
+
+template <std::floating_point T>
+[[nodiscard]] bool intersects(const LineSegment<T> &segment,
+                              const Rectangle<T> &rect,
+                              T epsilon = defaultEpsilon<T>) {
+  if (rect.containsPoint(segment.start) || rect.containsPoint(segment.end))
+    return true;
+  for (const auto &edge : rect.edges())
+    if (intersects(segment, edge, epsilon))
+      return true;
+  return false;
+}
+
+template <std::floating_point T>
+[[nodiscard]] bool intersects(const Triangle<T> &triangle,
+                              const Circle<T> &circle) {
+  for (const auto &edge : triangle.edges())
+    if (intersects(edge, circle))
+      return true;
+  return triangle.containsPoint(circle.center);
+}
+
+template <std::floating_point T>
+[[nodiscard]] bool intersects(const Triangle<T> &triangle,
+                              const LineSegment<T> &segment,
+                              T epsilon = defaultEpsilon<T>) {
+  for (const auto &edge : triangle.edges())
+    if (intersects(edge, segment, epsilon))
+      return true;
+  return triangle.containsPoint(segment.start, epsilon);
+}
+
+template <std::floating_point T>
+[[nodiscard]] bool intersects(const Triangle<T> &triangle,
+                              const Rectangle<T> &rect,
+                              T epsilon = defaultEpsilon<T>) {
+  for (const auto &edge : triangle.edges())
+    if (intersects(edge, rect, epsilon))
+      return true;
+  return triangle.containsPoint(rect.min, epsilon);
+}
+
+template <std::floating_point T>
+[[nodiscard]] bool intersects(const Triangle<T> &a, const Triangle<T> &b,
+                              T epsilon = defaultEpsilon<T>) {
+  for (const auto &edge : a.edges())
+    if (intersects(b, edge, epsilon))
+      return true;
+  return a.containsPoint(b.a, epsilon);
+}
+
+template <std::floating_point T>
+[[nodiscard]] constexpr bool intersects(const Circle<T> &circle,
+                                        const Rectangle<T> &rect) {
+  return intersects(rect, circle);
+}
+
+template <std::floating_point T>
+[[nodiscard]] bool intersects(const Circle<T> &circle,
+                              const LineSegment<T> &segment) {
+  return intersects(segment, circle);
+}
+
+template <std::floating_point T>
+[[nodiscard]] bool intersects(const Rectangle<T> &rect,
+                              const LineSegment<T> &segment,
+                              T epsilon = defaultEpsilon<T>) {
+  return intersects(segment, rect, epsilon);
+}
+
+template <std::floating_point T>
+[[nodiscard]] bool intersects(const Circle<T> &circle,
+                              const Triangle<T> &triangle) {
+  return intersects(triangle, circle);
+}
+
+template <std::floating_point T>
+[[nodiscard]] bool intersects(const LineSegment<T> &segment,
+                              const Triangle<T> &triangle,
+                              T epsilon = defaultEpsilon<T>) {
+  return intersects(triangle, segment, epsilon);
+}
+
+template <std::floating_point T>
+[[nodiscard]] bool intersects(const Rectangle<T> &rect,
+                              const Triangle<T> &triangle,
+                              T epsilon = defaultEpsilon<T>) {
+  return intersects(triangle, rect, epsilon);
+}
+
+using Circlef = Circle<float>;
+using Circled = Circle<double>;
+using Rectanglef = Rectangle<float>;
+using Rectangled = Rectangle<double>;
+using LineSegmentf = LineSegment<float>;
+using LineSegmentd = LineSegment<double>;
+using Trianglef = Triangle<float>;
+using Triangled = Triangle<double>;
 } // namespace mathlib
 
 namespace std {
@@ -637,6 +916,68 @@ template <floating_point T> struct formatter<mathlib::Vec3<T>> : formatter<T> {
     out = std::formatter<T>::format(v.y, ctx);
     out = std::format_to(out, ", ");
     out = std::formatter<T>::format(v.z, ctx);
+    out = std::format_to(out, ")");
+
+    return out;
+  }
+};
+
+template <floating_point T>
+struct formatter<mathlib::Circle<T>> : formatter<mathlib::Vec2<T>> {
+  auto format(const mathlib::Circle<T> &c, format_context &ctx) const {
+    auto out = ctx.out();
+
+    out = std::format_to(out, "Circle(center: ");
+    out = std::formatter<mathlib::Vec2<T>>::format(c.center, ctx);
+    out = std::format_to(out, ", radius: ");
+    out = std::formatter<T>::format(c.radius, ctx);
+    out = std::format_to(out, ")");
+
+    return out;
+  }
+};
+
+template <floating_point T>
+struct formatter<mathlib::Rectangle<T>> : formatter<mathlib::Vec2<T>> {
+  auto format(const mathlib::Rectangle<T> &r, format_context &ctx) const {
+    auto out = ctx.out();
+
+    out = std::format_to(out, "Rectangle(min: ");
+    out = std::formatter<mathlib::Vec2<T>>::format(r.min, ctx);
+    out = std::format_to(out, ", max: ");
+    out = std::formatter<mathlib::Vec2<T>>::format(r.max, ctx);
+    out = std::format_to(out, ")");
+
+    return out;
+  }
+};
+
+template <floating_point T>
+struct formatter<mathlib::LineSegment<T>> : formatter<mathlib::Vec2<T>> {
+  auto format(const mathlib::LineSegment<T> &l, format_context &ctx) const {
+    auto out = ctx.out();
+
+    out = std::format_to(out, "LineSegment(start: ");
+    out = std::formatter<mathlib::Vec2<T>>::format(l.start, ctx);
+    out = std::format_to(out, ", end: ");
+    out = std::formatter<mathlib::Vec2<T>>::format(l.end, ctx);
+    out = std::format_to(out, ")");
+
+    return out;
+  }
+};
+
+template <floating_point T>
+struct formatter<mathlib::Triangle<T>> : formatter<mathlib::Vec2<T>> {
+  auto format(const mathlib::Triangle<T> &t, format_context &ctx) const {
+    auto out = ctx.out();
+
+    out = std::format_to(out, "Triangle(a: ");
+    out = std::formatter<mathlib::Vec2<T>>::format(t.a, ctx);
+    out = std::format_to(out, ", b: ");
+    out = std::formatter<mathlib::Vec2<T>>::format(t.b, ctx);
+    out = std::format_to(out, ", c: ");
+    out = std::formatter<mathlib::Vec2<T>>::format(t.c, ctx);
     out = std::format_to(out, ")");
 
     return out;

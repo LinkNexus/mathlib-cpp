@@ -656,6 +656,282 @@ template <class T> void test_vec3_output() {
               "format spec applies to components");
 }
 
+// ──────────────────────────── angles ────────────────────────────
+
+template <class T> void test_angle_conversion() {
+  TEST_SUITE("angle conversion");
+  constexpr T pi = std::numbers::pi_v<T>;
+  TEST_ASSERT(near(mathlib::toRadians(T(180)), pi), "180 deg is pi");
+  TEST_ASSERT(near(mathlib::toRadians(T(-90)), -pi / 2), "negative degrees");
+  TEST_ASSERT(mathlib::toRadians(T(0)) == 0, "0 deg");
+  TEST_ASSERT(near(mathlib::toDegrees(pi / 2), T(90)), "pi / 2 is 90 deg");
+  TEST_ASSERT(near(mathlib::toDegrees(2 * pi), T(360)), "2 pi is 360 deg");
+  TEST_ASSERT(near(mathlib::toDegrees(mathlib::toRadians(T(37))), T(37)),
+              "round trip");
+  static_assert(mathlib::toDegrees(mathlib::toRadians(T(90))) > 0);
+}
+
+// ──────────────────────────── shapes ────────────────────────────
+
+template <class T> void test_circle() {
+  TEST_SUITE("Circle");
+  using C = mathlib::Circle<T>;
+  const C c{{1, 1}, 2};
+
+  TEST_ASSERT(c.containsPoint({1, 1}), "contains center");
+  TEST_ASSERT(c.containsPoint({2, 2}), "contains inner point");
+  TEST_ASSERT(c.containsPoint({3, 1}), "contains boundary point");
+  TEST_ASSERT(!c.containsPoint({3, 3}), "excludes outer point");
+
+  TEST_ASSERT(intersects(c, C{{4, 1}, 2}), "overlapping circles");
+  TEST_ASSERT(intersects(c, C{{5, 1}, 2}), "touching circles");
+  TEST_ASSERT(!intersects(c, C{{6, 1}, 2}), "separate circles");
+  TEST_ASSERT(intersects(c, C{{1, 1}, T(0.5)}), "circle inside circle");
+  TEST_ASSERT(C{}.radius == 0, "radius defaults to 0");
+  TEST_ASSERT(intersects(c, mathlib::Rectangle<T>{{2, 2}, {4, 4}}),
+              "intersects rectangle");
+  TEST_ASSERT(!intersects(c, mathlib::Rectangle<T>{{3, 3}, {4, 4}}),
+              "misses rectangle");
+  TEST_ASSERT(intersects(c, mathlib::LineSegment<T>{{-5, 1}, {5, 1}}),
+              "intersects segment");
+  TEST_ASSERT(!intersects(c, mathlib::LineSegment<T>{{-5, 4}, {5, 4}}),
+              "misses segment");
+  TEST_ASSERT(intersects(c, mathlib::Triangle<T>{{0, 0}, {1, 0}, {0, 1}}),
+              "intersects triangle");
+  TEST_ASSERT(!intersects(c, mathlib::Triangle<T>{{5, 5}, {6, 5}, {5, 6}}),
+              "misses triangle");
+  TEST_ASSERT(intersects(C{{4, 1}, 2}, c) == intersects(c, C{{4, 1}, 2}),
+              "intersection is symmetric");
+}
+
+template <class T> void test_rectangle() {
+  TEST_SUITE("Rectangle");
+  using R = mathlib::Rectangle<T>;
+  using C = mathlib::Circle<T>;
+  const R r{{0, 0}, {2, 2}};
+
+  TEST_ASSERT(r.containsPoint({1, 1}), "contains inner point");
+  TEST_ASSERT(r.containsPoint({2, 1}), "contains edge point");
+  TEST_ASSERT(r.containsPoint({0, 0}), "contains corner");
+  TEST_ASSERT(!r.containsPoint({3, 1}), "excludes point right");
+  TEST_ASSERT(!r.containsPoint({1, -1}), "excludes point below");
+
+  TEST_ASSERT(intersects(r, R{{1, 1}, {3, 3}}), "overlapping");
+  TEST_ASSERT(intersects(r, R{{2, 0}, {4, 2}}), "touching edge");
+  TEST_ASSERT(intersects(r, R{{T(0.5), T(0.5)}, {1, 1}}), "rectangle inside");
+  TEST_ASSERT(intersects(r, R{{-1, -1}, {3, 3}}), "rectangle around");
+  TEST_ASSERT(intersects(r, R{{T(0.5), -1}, {1, 3}}),
+              "crossing without containing corners");
+  TEST_ASSERT(!intersects(r, R{{3, 0}, {4, 2}}), "separate");
+
+  TEST_ASSERT(intersects(r, C{{1, 1}, T(0.5)}), "circle inside");
+  TEST_ASSERT(intersects(r, C{{3, 1}, T(1.5)}), "circle over edge");
+  TEST_ASSERT(intersects(r, C{{2, 3}, 1}), "circle touching edge");
+  TEST_ASSERT(intersects(r, C{{1, 1}, 10}), "rectangle inside circle");
+  TEST_ASSERT(!intersects(r, C{{3, 3}, T(1.3)}), "circle near corner");
+  TEST_ASSERT(!intersects(r, C{{5, 1}, 1}), "circle far away");
+
+  const auto corners = r.corners();
+  TEST_ASSERT(near(corners[0], {0, 0}) && near(corners[1], {2, 0}) &&
+                  near(corners[2], {2, 2}) && near(corners[3], {0, 2}),
+              "corners");
+  bool edgesConnect = true;
+  const auto edges = r.edges();
+  for (std::size_t i = 0; i < edges.size(); i++)
+    edgesConnect &= near(edges[i].end, edges[(i + 1) % edges.size()].start);
+  TEST_ASSERT(edgesConnect, "edges form a closed loop");
+  TEST_ASSERT(near(r.closestPointTo({5, 1}), {2, 1}), "closest point outside");
+  TEST_ASSERT(near(r.closestPointTo({1, 1}), {1, 1}), "closest point inside");
+
+  TEST_ASSERT(intersects(r, mathlib::LineSegment<T>{{-1, 1}, {3, 1}}),
+              "intersects segment");
+  TEST_ASSERT(!intersects(r, mathlib::LineSegment<T>{{-1, 3}, {3, 3}}),
+              "misses segment");
+  TEST_ASSERT(intersects(r, mathlib::Triangle<T>{{1, 1}, {5, 1}, {1, 5}}),
+              "intersects triangle");
+  TEST_ASSERT(!intersects(r, mathlib::Triangle<T>{{3, 3}, {4, 3}, {3, 4}}),
+              "misses triangle");
+}
+
+template <class T> void test_line_segment() {
+  TEST_SUITE("LineSegment");
+  using L = mathlib::LineSegment<T>;
+  using C = mathlib::Circle<T>;
+  using R = mathlib::Rectangle<T>;
+  const L s{{0, 0}, {4, 4}};
+
+  TEST_ASSERT(intersects(s, L{{0, 4}, {4, 0}}), "crossing");
+  TEST_ASSERT(!intersects(s, L{{1, 0}, {5, 4}}), "parallel");
+  TEST_ASSERT(!intersects(s, L{{3, 0}, {4, 1}}), "not reaching");
+  TEST_ASSERT(intersects(s, L{{2, 2}, {4, 0}}), "endpoint touching the middle");
+  TEST_ASSERT(intersects(s, L{{4, 4}, {6, 0}}), "shared endpoint");
+  TEST_ASSERT(intersects(s, L{{2, 2}, {6, 6}}), "collinear overlap");
+  TEST_ASSERT(!intersects(s, L{{5, 5}, {6, 6}}), "collinear apart");
+
+  TEST_ASSERT(s.containsPoint({0, 0}) && s.containsPoint({4, 4}),
+              "contains endpoints");
+  TEST_ASSERT(s.containsPoint({1, 1}), "contains inner point");
+  const L skew{{T(0.1), T(0.2)}, {T(3.7), T(1.9)}};
+  bool allOnSegment = true;
+  for (int i = 1; i < 10; i++)
+    allOnSegment &=
+        skew.containsPoint(skew.start.lerpedWith(skew.end, T(i) / 10));
+  TEST_ASSERT(allOnSegment, "contains interpolated points");
+  TEST_ASSERT(!s.containsPoint({1, 2}), "excludes point off the line");
+  TEST_ASSERT(!s.containsPoint({5, 5}), "excludes point past the end");
+  TEST_ASSERT(!s.containsPoint({-1, -1}), "excludes point before the start");
+
+  TEST_ASSERT(intersects(s, C{{2, 0}, 2}), "crossing circle");
+  TEST_ASSERT(intersects(L{{0, 1}, {4, 1}}, C{{2, 0}, 1}), "tangent to circle");
+  TEST_ASSERT(!intersects(s, C{{4, 0}, 1}), "missing circle");
+  TEST_ASSERT(intersects(s, C{{4, 4}, 1}), "ending inside circle");
+  TEST_ASSERT(intersects(s, C{{2, 2}, 10}), "inside circle");
+  TEST_ASSERT(!intersects(L{{0, 0}, {1, 0}}, C{{3, 0}, 1}),
+              "pointing at circle but too short");
+  TEST_ASSERT(intersects(L{{1, 1}, {1, 1}}, C{{1, 1}, 1}),
+              "degenerate segment inside circle");
+
+  const R r{{1, 1}, {3, 3}};
+  TEST_ASSERT(intersects(L{{0, 2}, {4, 2}}, r), "crossing rectangle");
+  TEST_ASSERT(intersects(L{{T(1.5), 2}, {T(2.5), 2}}, r), "inside rectangle");
+  TEST_ASSERT(intersects(L{{0, 2}, {2, 2}}, r), "ending inside");
+  TEST_ASSERT(intersects(L{{0, 4}, {1, 3}}, r), "touching corner");
+  TEST_ASSERT(intersects(L{{0, 1}, {4, 1}}, r), "along an edge");
+  TEST_ASSERT(!intersects(L{{0, 0}, {4, 0}}, r), "outside rectangle");
+
+  TEST_ASSERT(near(s.closestPointTo({0, 4}), {2, 2}), "closest point middle");
+  TEST_ASSERT(near(s.closestPointTo({-3, -1}), {0, 0}), "closest point start");
+  TEST_ASSERT(near(s.closestPointTo({9, 5}), {4, 4}), "closest point end");
+  TEST_ASSERT(near((L{{1, 1}, {1, 1}}.closestPointTo({5, 5})), {1, 1}),
+              "closest point on degenerate segment");
+  TEST_ASSERT(near(s.distanceTo(Vec2<T>(4, 0)), 2 * std::numbers::sqrt2_v<T>),
+              "distance to point");
+  TEST_ASSERT(near(s.distanceTo(L{{0, 4}, {4, 0}}), T(0)),
+              "distance to crossing segment");
+  TEST_ASSERT(
+      near(s.distanceTo(L{{1, 0}, {5, 0}}), std::numbers::sqrt2_v<T> / 2),
+      "distance to separate segment");
+  TEST_ASSERT(intersects(s, mathlib::Triangle<T>{{0, 4}, {4, 4}, {4, 6}}),
+              "intersects triangle");
+  TEST_ASSERT(!intersects(s, mathlib::Triangle<T>{{5, 0}, {6, 0}, {6, 1}}),
+              "misses triangle");
+}
+
+template <class T> void test_triangle() {
+  TEST_SUITE("Triangle");
+  using Tri = mathlib::Triangle<T>;
+  using C = mathlib::Circle<T>;
+  using R = mathlib::Rectangle<T>;
+  using L = mathlib::LineSegment<T>;
+  const Tri t{{0, 0}, {4, 0}, {0, 4}};
+  const Tri cw{{0, 0}, {0, 4}, {4, 0}};
+
+  TEST_ASSERT(t.containsPoint({0, 0}), "contains vertex");
+  TEST_ASSERT(t.containsPoint({1, 1}), "contains inner point");
+  const Tri skew{{T(0.1), T(0.2)}, {T(3.7), T(0.4)}, {T(1.3), T(2.9)}};
+  bool allInside = true;
+  for (int i = 1; i < 10; i++)
+    for (int j = 1; i + j < 10; j++)
+      allInside &= skew.containsPoint(skew.a + (skew.b - skew.a) * (T(i) / 10) +
+                                      (skew.c - skew.a) * (T(j) / 10));
+  TEST_ASSERT(allInside, "contains interior points");
+  TEST_ASSERT(t.containsPoint({2, 2}), "contains edge point");
+  TEST_ASSERT(!t.containsPoint({3, 3}), "excludes outer point");
+  TEST_ASSERT(!t.containsPoint({-1, 1}), "excludes point left");
+  TEST_ASSERT(cw.containsPoint({1, 1}) && !cw.containsPoint({3, 3}),
+              "winding does not matter");
+
+  TEST_ASSERT(intersects(t, Tri{{1, 1}, {5, 1}, {1, 5}}), "overlapping");
+  TEST_ASSERT(intersects(t, t), "identical");
+  TEST_ASSERT(intersects(t, Tri{{T(0.5), T(0.5)}, {1, T(0.5)}, {T(0.5), 1}}),
+              "triangle inside");
+  TEST_ASSERT(intersects(t, Tri{{4, 0}, {6, 0}, {6, 2}}), "sharing a vertex");
+  TEST_ASSERT(!intersects(t, Tri{{5, 5}, {6, 5}, {5, 6}}), "separate");
+
+  TEST_ASSERT(intersects(t, C{{1, 1}, T(0.1)}), "small circle inside");
+  TEST_ASSERT(intersects(t, C{{2, -1}, T(1.5)}), "circle over edge");
+  TEST_ASSERT(intersects(t, C{{5, 0}, 1}), "circle touching vertex");
+  TEST_ASSERT(intersects(t, C{{4, 4}, 10}), "triangle inside circle");
+  TEST_ASSERT(!intersects(t, C{{4, 4}, 1}), "circle outside");
+
+  TEST_ASSERT(intersects(t, R{{1, 1}, {5, 5}}), "overlapping rect");
+  TEST_ASSERT(intersects(t, R{{T(0.5), T(0.5)}, {1, 1}}), "rect inside");
+  TEST_ASSERT(intersects(t, R{{-1, -1}, {5, 5}}), "triangle inside rect");
+  TEST_ASSERT(!intersects(t, R{{3, 3}, {5, 5}}), "separate rect");
+
+  TEST_ASSERT(intersects(t, L{{-1, 1}, {5, 1}}), "crossing segment");
+  TEST_ASSERT(intersects(t, L{{1, 1}, {T(1.5), 1}}), "segment inside");
+  TEST_ASSERT(!intersects(t, L{{5, 0}, {5, 5}}), "segment outside");
+
+  bool triangleEdgesConnect = true;
+  const auto triangleEdges = t.edges();
+  for (std::size_t i = 0; i < triangleEdges.size(); i++)
+    triangleEdgesConnect &=
+        near(triangleEdges[i].end, triangleEdges[(i + 1) % 3].start);
+  TEST_ASSERT(triangleEdgesConnect, "edges form a closed loop");
+  const Tri flat{{0, 0}, {2, 0}, {4, 0}};
+  TEST_ASSERT(flat.containsPoint({3, 0}) && !flat.containsPoint({3, 1}),
+              "degenerate triangle acts as a segment");
+}
+
+template <class T> void test_intersects_symmetry() {
+  TEST_SUITE("intersects symmetry");
+  const mathlib::Circle<T> circles[] = {{{1, 1}, 1}, {{5, 5}, T(0.5)}};
+  const mathlib::Rectangle<T> rects[] = {{{0, 0}, {2, 2}}, {{4, -1}, {6, 1}}};
+  const mathlib::LineSegment<T> segments[] = {{{-1, 1}, {3, 1}},
+                                              {{4, 4}, {6, 6}}};
+  const mathlib::Triangle<T> triangles[] = {{{0, 0}, {3, 0}, {0, 3}},
+                                            {{5, 0}, {7, 0}, {6, 2}}};
+  bool symmetric = true;
+  auto check = [&](const auto &as, const auto &bs) {
+    for (const auto &a : as)
+      for (const auto &b : bs)
+        symmetric &= intersects(a, b) == intersects(b, a);
+  };
+  check(circles, rects);
+  check(circles, segments);
+  check(circles, triangles);
+  check(rects, segments);
+  check(rects, triangles);
+  check(segments, triangles);
+  check(circles, circles);
+  check(rects, rects);
+  check(segments, segments);
+  check(triangles, triangles);
+  TEST_ASSERT(symmetric, "intersects(a, b) == intersects(b, a)");
+}
+
+template <class T> void test_shape_output() {
+  TEST_SUITE("shape output");
+  TEST_ASSERT(std::format("{}", mathlib::Circle<T>{{1, 2}, 3}) ==
+                  "Circle(center: Vec2(1, 2), radius: 3)",
+              "Circle");
+  TEST_ASSERT(std::format("{}", mathlib::Rectangle<T>{{0, 0}, {1, 2}}) ==
+                  "Rectangle(min: Vec2(0, 0), max: Vec2(1, 2))",
+              "Rectangle");
+  TEST_ASSERT(std::format("{}", mathlib::LineSegment<T>{{0, 0}, {1, 2}}) ==
+                  "LineSegment(start: Vec2(0, 0), end: Vec2(1, 2))",
+              "LineSegment");
+  TEST_ASSERT(std::format("{}", mathlib::Triangle<T>{{0, 0}, {1, 0}, {0, 1}}) ==
+                  "Triangle(a: Vec2(0, 0), b: Vec2(1, 0), c: Vec2(0, 1))",
+              "Triangle");
+  TEST_ASSERT(streamed(mathlib::Circle<T>{{1, 2}, 3}) ==
+                  "Circle(center: Vec2(1, 2), radius: 3)",
+              "Circle operator<<");
+  TEST_ASSERT(streamed(mathlib::Rectangle<T>{{0, 0}, {1, 2}}) ==
+                  "Rectangle(min: Vec2(0, 0), max: Vec2(1, 2))",
+              "Rectangle operator<<");
+  TEST_ASSERT(streamed(mathlib::LineSegment<T>{{0, 0}, {1, 2}}) ==
+                  "LineSegment(start: Vec2(0, 0), end: Vec2(1, 2))",
+              "LineSegment operator<<");
+  TEST_ASSERT(streamed(mathlib::Triangle<T>{{0, 0}, {1, 0}, {0, 1}}) ==
+                  "Triangle(a: Vec2(0, 0), b: Vec2(1, 0), c: Vec2(0, 1))",
+              "Triangle operator<<");
+  TEST_ASSERT(std::format("{:.1f}", mathlib::Circle<T>{{1, 2}, 3}) ==
+                  "Circle(center: Vec2(1.0, 2.0), radius: 3.0)",
+              "format spec applies to components");
+}
+
 template <class T> void run_all(const char *type) {
   printf("\n═══ %s ═══\n", type);
   test_vec2_construction<T>();
@@ -685,6 +961,14 @@ template <class T> void run_all(const char *type) {
   test_vec3_orthonormal<T>();
   test_vec3_move_towards<T>();
   test_vec3_output<T>();
+
+  test_angle_conversion<T>();
+  test_circle<T>();
+  test_rectangle<T>();
+  test_line_segment<T>();
+  test_triangle<T>();
+  test_intersects_symmetry<T>();
+  test_shape_output<T>();
 }
 
 int main(void) {
