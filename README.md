@@ -29,21 +29,32 @@ int main() {
   rotation, lerp and slerp, projection, reflection, `moveTowards`, and
   approximate comparisons. `Vec3` adds rotation around an axis and projection
   onto a plane.
-- **Shapes**: `Circle`, `Rectangle`, `LineSegment` and `Triangle`, with
-  `containsPoint`, closest-point and distance queries, and factory functions
-  such as `Rectangle::fromCenterAndSize` and `Triangle::equilateral`. All
-  shapes scale about the origin with `*`, `/`, `scaledBy` and `dividedBy`,
-  about any point with `scaledFromPointBy`, or about a natural anchor:
-  `scaledFromCenterBy` (circles, rectangles, segments), `scaledFromMinBy` /
-  `scaledFromMaxBy` (rectangles), `scaledFromCentroidBy` (triangles) and
+- **2D shapes**: `Circle`, `Rectangle`, `LineSegment` and `Triangle`.
+- **3D solids**: `Sphere` and `Cuboid` (axis-aligned).
+- **Flat shapes in 3D**: `Circle3` (a disc with a normal), `Rectangle3` (a
+  corner and two side vectors, so it can face any way), `Triangle3` and
+  `LineSegment3`, with `normal()` and `area()` where they apply. Each 2D
+  shape can be placed in 3D at a given height with `Circle3::fromCircle`,
+  `Rectangle3::fromRectangle`, `Triangle3::fromTriangle` and
+  `LineSegment3::fromLineSegment`.
+- **Shape queries**: `containsPoint`, closest-point and distance queries, and
+  factory functions such as `Rectangle::fromCenterAndSize`,
+  `Cuboid::fromMinAndSize` and `Triangle::equilateral`.
+- **Shape scaling**: every shape scales about the origin with `*`, `/`,
+  `scaledBy` and `dividedBy`, and about any point with `scaledFromPointBy`.
+  Shapes also scale about a natural anchor: `scaledFromCenterBy` (circles,
+  spheres, rectangles, cuboids, segments), `scaledFromMinBy` /
+  `scaledFromMaxBy` (rectangles, cuboids), `scaledFromCornerBy`
+  (`Rectangle3`), `scaledFromCentroidBy` (triangles) and
   `scaledFromStartPointBy` / `scaledFromEndPointBy` (segments).
-- **`intersects(a, b)`**: defined for every pair of shapes, in either order.
+- **`intersects(a, b)`**: defined for every pair of 2D shapes and every pair
+  of 3D shapes, in either order.
 - **Output**: `operator<<` and `std::format` for every type, with format
   specs applied to each component (`std::format("{:.2f}", v)`).
 - `toRadians` / `toDegrees`.
 
 Every type is a template over `std::floating_point`, with `f` and `d` aliases
-(`Vec2f`, `Vec3d`, `Rectanglef`, ...). Widening conversions such as
+(`Vec2f`, `Vec3d`, `Rectanglef`, `Cuboidd`, ...). Widening conversions such as
 `Vec2f` to `Vec2d` are implicit; narrowing ones are `explicit`.
 
 ## Conventions
@@ -56,8 +67,14 @@ Every type is a template over `std::floating_point`, with `f` and `d` aliases
   optional `epsilon`, an absolute distance that defaults to
   `defaultEpsilon<T>` (about `1e-4` for `float`, `2e-13` for `double`). Pass
   a larger one when working with large coordinates.
-- `Rectangle` expects `min <= max` on both axes. Its factory functions always
-  produce a valid rectangle, even from negative sizes or unordered corners.
+- `Rectangle` and `Cuboid` expect `min <= max` on every axis. Their factory
+  functions always produce a valid box, even from negative sizes or unordered
+  corners.
+- `Circle3`, `Rectangle3` and `Triangle3` are flat surfaces, so
+  `containsPoint` tests whether the point lies on them (within `epsilon`).
+- A `Circle3` normal must be non-zero but need not be unit length; it defaults
+  to `+z`. `Rectangle3` expects its sides `u` and `v` to be orthogonal, and
+  otherwise behaves as a parallelogram.
 - Passing a bare braced list as a shape (`intersects(c, {{0, 0}, {1, 1}})`)
   is ambiguous between shape types; name the type instead.
 

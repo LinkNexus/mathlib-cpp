@@ -1153,6 +1153,698 @@ template <class T> void test_shape_output() {
               "format spec applies to components");
 }
 
+template <class T> void test_sphere() {
+  TEST_SUITE("Sphere");
+  using S = mathlib::Sphere<T>;
+  using B = mathlib::Cuboid<T>;
+  using L = mathlib::LineSegment3<T>;
+  using Tri = mathlib::Triangle3<T>;
+  const S s{{1, 1, 1}, 2};
+
+  TEST_ASSERT(s.containsPoint({1, 1, 1}), "contains center");
+  TEST_ASSERT(s.containsPoint({2, 2, 2}), "contains inner point");
+  TEST_ASSERT(s.containsPoint({1, 1, 3}), "contains boundary point");
+  TEST_ASSERT(!s.containsPoint({3, 3, 1}), "excludes outer point");
+  TEST_ASSERT(S{}.radius == 0, "radius defaults to 0");
+
+  TEST_ASSERT(intersects(s, S{{1, 1, 4}, 2}), "overlapping spheres");
+  TEST_ASSERT(intersects(s, S{{1, 1, 5}, 2}), "touching spheres");
+  TEST_ASSERT(!intersects(s, S{{1, 1, 6}, 2}), "separate spheres");
+  TEST_ASSERT(intersects(s, S{{1, 1, 1}, T(0.5)}), "sphere inside sphere");
+
+  TEST_ASSERT(intersects(s, B{{2, 2, 2}, {4, 4, 4}}), "intersects cuboid");
+  TEST_ASSERT(intersects(s, B{{3, 0, 0}, {4, 2, 2}}), "touching cuboid face");
+  TEST_ASSERT(intersects(s, B{{-5, -5, -5}, {5, 5, 5}}), "inside cuboid");
+  TEST_ASSERT(!intersects(s, B{{3, 3, 3}, {4, 4, 4}}), "misses cuboid corner");
+
+  TEST_ASSERT(intersects(s, L{{-5, 1, 1}, {5, 1, 1}}), "intersects segment");
+  TEST_ASSERT(intersects(s, L{{-5, 1, 3}, {5, 1, 3}}), "tangent segment");
+  TEST_ASSERT(!intersects(s, L{{-5, 1, 4}, {5, 1, 4}}), "misses segment");
+  TEST_ASSERT(intersects(s, L{{1, 1, 1}, {1, 1, 1}}),
+              "degenerate segment inside");
+
+  TEST_ASSERT(intersects(s, Tri{{-5, -5, 2}, {5, -5, 2}, {0, 5, 2}}),
+              "cut by triangle");
+  TEST_ASSERT(
+      intersects(S{{0, 0, 0}, 1}, Tri{{-5, -5, 1}, {5, -5, 1}, {0, 5, 1}}),
+      "touching triangle face");
+  TEST_ASSERT(
+      intersects(S{{0, 0, 0}, 10}, Tri{{0, 0, 0}, {1, 0, 0}, {0, 1, 0}}),
+      "triangle inside sphere");
+  TEST_ASSERT(
+      !intersects(S{{3, 3, 0}, 1}, Tri{{0, 0, 0}, {2, 0, 0}, {0, 2, 0}}),
+      "beside the triangle in its plane");
+  TEST_ASSERT(
+      !intersects(S{{0, 0, 3}, 1}, Tri{{-5, -5, 0}, {5, -5, 0}, {0, 5, 0}}),
+      "above the triangle");
+}
+
+template <class T> void test_cuboid() {
+  TEST_SUITE("Cuboid");
+  using B = mathlib::Cuboid<T>;
+  using L = mathlib::LineSegment3<T>;
+  using Tri = mathlib::Triangle3<T>;
+  const B b{{0, 0, 0}, {2, 2, 2}};
+
+  TEST_ASSERT(b.containsPoint({1, 1, 1}), "contains inner point");
+  TEST_ASSERT(b.containsPoint({2, 1, 1}), "contains face point");
+  TEST_ASSERT(b.containsPoint({2, 2, 2}), "contains corner");
+  TEST_ASSERT(!b.containsPoint({1, 1, 3}), "excludes point above");
+  TEST_ASSERT(!b.containsPoint({-1, 1, 1}), "excludes point left");
+
+  TEST_ASSERT(intersects(b, B{{1, 1, 1}, {3, 3, 3}}), "overlapping");
+  TEST_ASSERT(intersects(b, B{{2, 0, 0}, {4, 2, 2}}), "touching face");
+  TEST_ASSERT(intersects(b, B{{2, 2, 2}, {3, 3, 3}}), "touching corner");
+  TEST_ASSERT(intersects(b, B{{T(0.5), T(0.5), T(0.5)}, {1, 1, 1}}),
+              "cuboid inside");
+  TEST_ASSERT(intersects(b, B{{T(0.5), T(0.5), -1}, {1, 1, 3}}),
+              "crossing without containing corners");
+  TEST_ASSERT(!intersects(b, B{{0, 0, 3}, {2, 2, 4}}), "separate in z");
+
+  const auto corners = b.corners();
+  bool cornersOnBox = true;
+  for (const auto &corner : corners)
+    for (std::size_t axis = 0; axis < 3; axis++)
+      cornersOnBox &= corner[axis] == 0 || corner[axis] == 2;
+  bool distinct = true;
+  for (std::size_t i = 0; i < corners.size(); i++)
+    for (std::size_t j = i + 1; j < corners.size(); j++)
+      distinct &= !near(corners[i], corners[j]);
+  TEST_ASSERT(cornersOnBox && distinct, "corners");
+  bool edgesValid = true;
+  for (const auto &edge : b.edges())
+    edgesValid &=
+        near(edge.direction().length(), T(2)) &&
+        edge.direction().isParallelTo(Vec3<T>::unitX(), tol<T>()) +
+                edge.direction().isParallelTo(Vec3<T>::unitY(), tol<T>()) +
+                edge.direction().isParallelTo(Vec3<T>::unitZ(), tol<T>()) ==
+            1;
+  TEST_ASSERT(edgesValid, "edges run along one axis between corners");
+  TEST_ASSERT(near(b.closestPointTo({5, 1, -3}), {2, 1, 0}),
+              "closest point outside");
+  TEST_ASSERT(near(b.closestPointTo({1, 1, 1}), {1, 1, 1}),
+              "closest point inside");
+
+  TEST_ASSERT(intersects(b, L{{-1, 1, 1}, {3, 1, 1}}), "crossing segment");
+  TEST_ASSERT(intersects(b, L{{-1, -1, -1}, {3, 3, 3}}), "diagonal segment");
+  TEST_ASSERT(intersects(b, L{{1, 1, 1}, {T(1.5), 1, 1}}), "segment inside");
+  TEST_ASSERT(intersects(b, L{{1, 1, 1}, {5, 5, 5}}), "segment leaving");
+  TEST_ASSERT(intersects(b, L{{-1, 0, 2}, {3, 0, 2}}), "along an edge");
+  TEST_ASSERT(intersects(b, L{{3, 3, 1}, {1, 1, 3}}), "touching an edge");
+  TEST_ASSERT(intersects(b, L{{3, 1, 1}, {2, 1, 1}}), "ending on a face");
+  TEST_ASSERT(!intersects(b, L{{-1, 3, 1}, {3, 3, 1}}), "parallel outside");
+  TEST_ASSERT(!intersects(b, L{{3, T(1.5), 1}, {T(1.5), 3, 1}}),
+              "passing an edge diagonally");
+  TEST_ASSERT(!intersects(b, L{{3, 1, 1}, {5, 1, 1}}),
+              "pointing at the cuboid but too short");
+
+  TEST_ASSERT(intersects(b, Tri{{-5, -5, 1}, {5, -5, 1}, {0, 5, 1}}),
+              "cut by a large triangle");
+  TEST_ASSERT(intersects(b, Tri{{1, 1, 1}, {T(1.5), 1, 1}, {1, T(1.5), 1}}),
+              "triangle inside");
+  TEST_ASSERT(intersects(b, Tri{{1, 1, 1}, {5, 1, 1}, {1, 5, 1}}),
+              "triangle poking out");
+  TEST_ASSERT(intersects(b, Tri{{-1, -1, 2}, {5, -1, 2}, {-1, 5, 2}}),
+              "triangle lying on the top face");
+  TEST_ASSERT(intersects(b, Tri{{-10, 1, -1}, {10, 1, -1}, {0, 1, 10}}),
+              "edge of the cuboid pierces the triangle");
+  TEST_ASSERT(!intersects(b, Tri{{3, 0, 0}, {3, 2, 0}, {3, 0, 2}}),
+              "triangle beside");
+  TEST_ASSERT(!intersects(b, Tri{{7, 0, 0}, {0, 7, 0}, {0, 0, 7}}),
+              "triangle facing the far corner");
+  TEST_ASSERT(intersects(b, Tri{{6, 0, 0}, {0, 6, 0}, {0, 0, 6}}),
+              "triangle touching the far corner");
+  TEST_ASSERT(intersects(b, Tri{{3, 0, 0}, {0, 3, 0}, {0, 0, 3}}),
+              "triangle cutting the corner");
+}
+
+template <class T> void test_line_segment3() {
+  TEST_SUITE("LineSegment3");
+  using L = mathlib::LineSegment3<T>;
+  const L s{{0, 0, 0}, {4, 4, 0}};
+
+  TEST_ASSERT(intersects(s, L{{0, 4, 0}, {4, 0, 0}}), "crossing");
+  TEST_ASSERT(!intersects(s, L{{0, 4, 1}, {4, 0, 1}}), "skew above");
+  TEST_ASSERT(!intersects(s, L{{1, 0, 0}, {5, 4, 0}}), "parallel");
+  TEST_ASSERT(intersects(s, L{{2, 2, 0}, {2, 2, 5}}),
+              "endpoint touching the middle");
+  TEST_ASSERT(intersects(s, L{{4, 4, 0}, {4, 4, 3}}), "shared endpoint");
+  TEST_ASSERT(intersects(s, L{{2, 2, 0}, {6, 6, 0}}), "collinear overlap");
+  TEST_ASSERT(!intersects(s, L{{5, 5, 0}, {6, 6, 0}}), "collinear apart");
+
+  TEST_ASSERT(s.containsPoint({0, 0, 0}) && s.containsPoint({4, 4, 0}),
+              "contains endpoints");
+  const L skew{{T(0.1), T(0.2), T(0.3)}, {T(3.7), T(1.9), T(-2.3)}};
+  bool allOnSegment = true;
+  for (int i = 1; i < 10; i++)
+    allOnSegment &=
+        skew.containsPoint(skew.start.lerpedWith(skew.end, T(i) / 10));
+  TEST_ASSERT(allOnSegment, "contains interpolated points");
+  TEST_ASSERT(!s.containsPoint({1, 1, 1}), "excludes point off the line");
+  TEST_ASSERT(!s.containsPoint({5, 5, 0}), "excludes point past the end");
+
+  TEST_ASSERT(near(s.direction(), {4, 4, 0}), "direction");
+  TEST_ASSERT(near(s.midpoint(), {2, 2, 0}), "midpoint");
+  TEST_ASSERT(near(s.closestPointTo({0, 4, 7}), {2, 2, 0}),
+              "closest point middle");
+  TEST_ASSERT(near(s.closestPointTo({-3, -1, 2}), {0, 0, 0}),
+              "closest point start");
+  TEST_ASSERT(
+      near((L{{1, 1, 1}, {1, 1, 1}}.closestPointTo({5, 5, 5})), {1, 1, 1}),
+      "closest point on degenerate segment");
+  TEST_ASSERT(near(s.distanceTo(Vec3<T>(2, 2, 3)), T(3)), "distance to point");
+  TEST_ASSERT(near(s.distanceTo(L{{0, 4, 3}, {4, 0, 3}}), T(3)),
+              "distance to skew segment");
+  TEST_ASSERT(near(L{{0, 0, 0}, {1, 0, 0}}.distanceTo(L{{3, -1, 1}, {3, 1, 1}}),
+                   std::sqrt(T(5))),
+              "distance past the ends");
+  TEST_ASSERT(near(s.distanceTo(L{{1, 0, 2}, {5, 4, 2}}), std::sqrt(T(4.5))),
+              "distance to parallel segment");
+  TEST_ASSERT(near(s.distanceTo(L{{2, 2, 2}, {2, 2, 2}}), T(2)),
+              "distance to degenerate segment");
+}
+
+template <class T> void test_triangle3() {
+  TEST_SUITE("Triangle3");
+  using Tri = mathlib::Triangle3<T>;
+  using L = mathlib::LineSegment3<T>;
+  const Tri t{{0, 0, 0}, {4, 0, 0}, {0, 4, 0}};
+
+  TEST_ASSERT(near(t.normal(), {0, 0, 1}), "normal");
+  TEST_ASSERT(near((Tri{t.a, t.c, t.b}.normal()), {0, 0, -1}),
+              "normal follows the winding");
+  TEST_ASSERT(near(t.area(), T(8)), "area");
+  TEST_ASSERT(near(t.centroid(), {T(4) / 3, T(4) / 3, 0}), "centroid");
+
+  TEST_ASSERT(t.containsPoint({0, 0, 0}), "contains vertex");
+  TEST_ASSERT(t.containsPoint({2, 2, 0}), "contains edge point");
+  TEST_ASSERT(t.containsPoint({1, 1, 0}), "contains inner point");
+  TEST_ASSERT(!t.containsPoint({1, 1, T(0.1)}), "excludes point above");
+  TEST_ASSERT(!t.containsPoint({3, 3, 0}), "excludes point beside");
+  const Tri skew{{T(0.1), T(0.2), T(0.3)},
+                 {T(3.7), T(0.4), T(-1.1)},
+                 {T(1.3), T(2.9), T(2.2)}};
+  bool allInside = true;
+  for (int i = 1; i < 10; i++)
+    for (int j = 1; i + j < 10; j++)
+      allInside &= skew.containsPoint(skew.a + (skew.b - skew.a) * (T(i) / 10) +
+                                      (skew.c - skew.a) * (T(j) / 10));
+  TEST_ASSERT(allInside, "contains interior points");
+
+  TEST_ASSERT(near(t.closestPointTo({1, 1, 5}), {1, 1, 0}),
+              "closest point above the face");
+  TEST_ASSERT(near(t.closestPointTo({-2, -3, 1}), {0, 0, 0}),
+              "closest point at a vertex");
+  TEST_ASSERT(near(t.closestPointTo({4, 4, 1}), {2, 2, 0}),
+              "closest point on an edge");
+  TEST_ASSERT(near(t.distanceTo(Vec3<T>(1, 1, -2)), T(2)), "distance");
+  const Tri flat{{0, 0, 0}, {2, 0, 0}, {4, 0, 0}};
+  TEST_ASSERT(near(flat.normal(), {0, 0, 0}) && near(flat.area(), T(0)),
+              "degenerate normal and area");
+  TEST_ASSERT(flat.containsPoint({3, 0, 0}) && !flat.containsPoint({3, 1, 0}),
+              "degenerate triangle acts as a segment");
+  TEST_ASSERT(near(flat.closestPointTo({3, 2, 0}), {3, 0, 0}),
+              "degenerate closest point");
+
+  TEST_ASSERT(intersects(t, L{{1, 1, -1}, {1, 1, 1}}), "pierced by segment");
+  TEST_ASSERT(intersects(t, L{{1, 1, 0}, {1, 1, 1}}), "segment ending on face");
+  TEST_ASSERT(intersects(t, L{{-1, 1, 0}, {5, 1, 0}}), "coplanar crossing");
+  TEST_ASSERT(intersects(t, L{{1, 1, 0}, {T(1.5), 1, 0}}), "segment inside");
+  TEST_ASSERT(intersects(t, L{{2, 2, -1}, {2, 2, 1}}),
+              "segment through an edge");
+  TEST_ASSERT(!intersects(t, L{{3, 3, -1}, {3, 3, 1}}),
+              "segment through the plane outside");
+  TEST_ASSERT(!intersects(t, L{{1, 1, 1}, {1, 1, 2}}), "segment above");
+  TEST_ASSERT(!intersects(t, L{{5, 0, 0}, {5, 5, 0}}), "coplanar outside");
+
+  TEST_ASSERT(intersects(t, t), "identical");
+  TEST_ASSERT(intersects(t, Tri{{1, 1, -1}, {1, 1, 1}, {5, 5, 0}}), "piercing");
+  TEST_ASSERT(intersects(t, Tri{{-5, -5, 0}, {5, -5, 0}, {0, 5, 0}}) &&
+                  intersects(t, Tri{{1, 1, 0}, {2, 1, 0}, {1, 2, 0}}),
+              "coplanar overlapping");
+  TEST_ASSERT(intersects(t, Tri{{1, 1, -1}, {2, 1, -1}, {1, 1, 1}}),
+              "crossing through the face only");
+  TEST_ASSERT(intersects(t, Tri{{4, 0, 0}, {6, 0, 1}, {6, 1, 0}}),
+              "sharing a vertex");
+  TEST_ASSERT(!intersects(t, Tri{{0, 0, 1}, {4, 0, 1}, {0, 4, 1}}),
+              "parallel above");
+  TEST_ASSERT(!intersects(t, Tri{{3, 3, -1}, {5, 5, -1}, {4, 4, 2}}),
+              "crossing the plane beside it");
+}
+
+template <class T> void test_intersects3d_symmetry() {
+  TEST_SUITE("intersects symmetry (3D)");
+  const mathlib::Sphere<T> spheres[] = {{{1, 1, 1}, 1}, {{5, 5, 5}, T(0.5)}};
+  const mathlib::Cuboid<T> cuboids[] = {{{0, 0, 0}, {2, 2, 2}},
+                                        {{4, -1, 0}, {6, 1, 1}}};
+  const mathlib::LineSegment3<T> segments[] = {{{-1, 1, 1}, {3, 1, 1}},
+                                               {{4, 4, 4}, {6, 6, 6}}};
+  const mathlib::Triangle3<T> triangles[] = {{{0, 0, 1}, {3, 0, 1}, {0, 3, 1}},
+                                             {{5, 0, 0}, {7, 0, 0}, {6, 2, 1}}};
+  const mathlib::Circle3<T> circles[] = {{{1, 1, 0}, 1, {0, 1, 1}},
+                                         {{6, 0, 1}, 2}};
+  const mathlib::Rectangle3<T> rects[] = {{{0, 0, 0}, {2, 0, 0}, {0, 2, 2}},
+                                          {{5, 5, 5}, {0, 1, 0}, {0, 0, 1}}};
+  bool symmetric = true;
+  auto check = [&](const auto &as, const auto &bs) {
+    for (const auto &a : as)
+      for (const auto &b : bs)
+        symmetric &= intersects(a, b) == intersects(b, a);
+  };
+  check(circles, spheres);
+  check(circles, cuboids);
+  check(circles, segments);
+  check(circles, triangles);
+  check(circles, rects);
+  check(circles, circles);
+  check(rects, spheres);
+  check(rects, cuboids);
+  check(rects, segments);
+  check(rects, triangles);
+  check(rects, rects);
+  check(spheres, cuboids);
+  check(spheres, segments);
+  check(spheres, triangles);
+  check(cuboids, segments);
+  check(cuboids, triangles);
+  check(segments, triangles);
+  check(spheres, spheres);
+  check(cuboids, cuboids);
+  check(segments, segments);
+  check(triangles, triangles);
+  TEST_ASSERT(symmetric, "intersects(a, b) == intersects(b, a)");
+}
+
+template <class T> void test_shapes3d_factories() {
+  TEST_SUITE("3D shape factories");
+  using S = mathlib::Sphere<T>;
+  using B = mathlib::Cuboid<T>;
+  using L = mathlib::LineSegment3<T>;
+
+  const S d = S::fromDiameter({0, 0, 0}, {0, 0, 4});
+  TEST_ASSERT(near(d.center, {0, 0, 2}) && near(d.radius, T(2)),
+              "fromDiameter");
+  const S p = S::fromCenterAndPoint({1, 1, 1}, {3, 3, 2});
+  TEST_ASSERT(near(p.radius, T(3)) && p.containsPoint({3, 3, 2}),
+              "fromCenterAndPoint");
+
+  const B a = B::fromMinAndSize({1, 2, 3}, 3, 4, 5);
+  TEST_ASSERT(near(a.min, {1, 2, 3}) && near(a.max, {4, 6, 8}),
+              "fromMinAndSize");
+  const B neg = B::fromMinAndSize({1, 2, 3}, -3, -4, -5);
+  TEST_ASSERT(near(neg.min, {-2, -2, -2}) && near(neg.max, {1, 2, 3}),
+              "fromMinAndSize with negative size");
+  const B c = B::fromCenterAndSize({0, 0, 0}, 4, 2, 6);
+  TEST_ASSERT(near(c.min, {-2, -1, -3}) && near(c.max, {2, 1, 3}),
+              "fromCenterAndSize");
+  const B k = B::fromCorners({3, 1, 5}, {1, 4, 2});
+  TEST_ASSERT(near(k.min, {1, 1, 2}) && near(k.max, {3, 4, 5}),
+              "fromCorners orders the corners");
+  TEST_ASSERT(near(k.center(), {2, T(2.5), T(3.5)}), "center");
+  static_assert(B::fromMinAndSize({0, 0, 0}, 1, 1, 1).max.z == 1);
+  static_assert(B::fromCenterAndSize({0, 0, 0}, 2, 2, 2).min.z == -1);
+
+  const L sd = L::fromStartAndDirection({1, 1, 1}, {2, -1, 3});
+  TEST_ASSERT(near(sd.start, {1, 1, 1}) && near(sd.end, {3, 0, 4}),
+              "fromStartAndDirection");
+}
+
+template <class T> void test_shapes3d_scaling() {
+  TEST_SUITE("3D shape scaling");
+  using S = mathlib::Sphere<T>;
+  using B = mathlib::Cuboid<T>;
+  using L = mathlib::LineSegment3<T>;
+  using Tri = mathlib::Triangle3<T>;
+  const Vec3<T> pivot(1, 1, 1);
+
+  const S s{{1, 2, 3}, 2};
+  const S s2 = s * T(-2);
+  TEST_ASSERT(near(s2.center, {-2, -4, -6}) && near(s2.radius, T(4)),
+              "sphere * negative scalar");
+  TEST_ASSERT(near((T(2) * s).radius, T(4)) && near((s / T(-2)).radius, T(1)),
+              "scalar * sphere, sphere / scalar");
+  S sm = s;
+  sm *= T(2);
+  sm /= T(4);
+  TEST_ASSERT(near(sm.center, {T(0.5), 1, T(1.5)}) && near(sm.radius, T(1)),
+              "sphere *= and /=");
+  const S sp = s.scaledFromPointBy(pivot, 2);
+  TEST_ASSERT(near(sp.center, {1, 3, 5}) && near(sp.radius, T(4)),
+              "sphere scaledFromPointBy");
+  const S sc = s.scaledFromCenterBy(3);
+  TEST_ASSERT(near(sc.center, s.center) && near(sc.radius, T(6)),
+              "sphere scaledFromCenterBy");
+  sm = s;
+  TEST_ASSERT(&sm.scaleFromCenterBy(3) == &sm && near(sm.radius, T(6)),
+              "sphere scaleFromCenterBy");
+  sm = s;
+  TEST_ASSERT(&sm.scaleFromPointBy(pivot, 2) == &sm &&
+                  near(sm.center, sp.center),
+              "sphere scaleFromPointBy");
+
+  const L l{{1, 1, 1}, {3, 5, 7}};
+  const L l2 = l * T(2);
+  TEST_ASSERT(near(l2.start, {2, 2, 2}) && near(l2.end, {6, 10, 14}),
+              "segment * scalar");
+  TEST_ASSERT(near((T(2) * l).end, l2.end) && near((l2 / T(2)).end, l.end),
+              "scalar * segment, segment / scalar");
+  TEST_ASSERT(near(l.scaledFromStartPointBy(2).end, {5, 9, 13}),
+              "segment scaledFromStartPointBy");
+  TEST_ASSERT(near(l.scaledFromEndPointBy(2).start, {-1, -3, -5}),
+              "segment scaledFromEndPointBy");
+  const L lc = l.scaledFromCenterBy(2);
+  TEST_ASSERT(near(lc.start, {0, -1, -2}) && near(lc.end, {4, 7, 10}),
+              "segment scaledFromCenterBy");
+  L lm = l;
+  TEST_ASSERT(&lm.scaleFromCenterBy(2) == &lm && near(lm.end, lc.end),
+              "segment scaleFromCenterBy");
+  lm = l;
+  lm *= T(2);
+  lm /= T(2);
+  TEST_ASSERT(near(lm.end, l.end), "segment *= and /=");
+
+  const B b{{1, 1, 1}, {3, 5, 7}};
+  const B bn = b * T(-1);
+  TEST_ASSERT(near(bn.min, {-3, -5, -7}) && near(bn.max, {-1, -1, -1}),
+              "negative scale keeps min <= max");
+  TEST_ASSERT(near((T(2) * b).max, {6, 10, 14}) &&
+                  near((b / T(-1)).min, {-3, -5, -7}),
+              "scalar * cuboid, cuboid / scalar");
+  const B bc = b.scaledFromCenterBy(2);
+  TEST_ASSERT(near(bc.min, {0, -1, -2}) && near(bc.max, {4, 7, 10}),
+              "cuboid scaledFromCenterBy");
+  TEST_ASSERT(near(b.scaledFromMinBy(2).max, {5, 9, 13}) &&
+                  near(b.scaledFromMinBy(2).min, b.min),
+              "cuboid scaledFromMinBy");
+  TEST_ASSERT(near(b.scaledFromMaxBy(2).min, {-1, -3, -5}) &&
+                  near(b.scaledFromMaxBy(2).max, b.max),
+              "cuboid scaledFromMaxBy");
+  B bm = b;
+  TEST_ASSERT(&bm.scaleFromCenterBy(2) == &bm && near(bm.max, bc.max),
+              "cuboid scaleFromCenterBy");
+  bm = b;
+  bm *= T(2);
+  bm /= T(2);
+  TEST_ASSERT(near(bm.max, b.max), "cuboid *= and /=");
+
+  const Tri t{{0, 0, 0}, {3, 0, 0}, {0, 3, 3}};
+  const Tri t2 = t * T(2);
+  TEST_ASSERT(near(t2.b, {6, 0, 0}) && near(t2.c, {0, 6, 6}),
+              "triangle * scalar");
+  TEST_ASSERT(near((T(2) * t).c, t2.c) && near((t2 / T(2)).c, t.c),
+              "scalar * triangle, triangle / scalar");
+  const Tri tc = t.scaledFromCentroidBy(2);
+  TEST_ASSERT(near(tc.centroid(), t.centroid()) &&
+                  near(tc.area(), 4 * t.area()),
+              "triangle scaledFromCentroidBy");
+  TEST_ASSERT(near(t.scaledFromPointBy(t.a, 2).c, t2.c),
+              "triangle scaledFromPointBy vertex");
+  Tri tm = t;
+  TEST_ASSERT(&tm.scaleFromCentroidBy(2) == &tm && near(tm.b, tc.b),
+              "triangle scaleFromCentroidBy");
+  tm = t;
+  tm *= T(2);
+  tm /= T(2);
+  TEST_ASSERT(near(tm.c, t.c), "triangle *= and /=");
+
+  const mathlib::Circle3<T> c{{1, 2, 3}, 2, {1, 0, 0}};
+  const mathlib::Circle3<T> c2 = c * T(-2);
+  TEST_ASSERT(near(c2.center, {-2, -4, -6}) && near(c2.radius, T(4)) &&
+                  near(c2.normal, c.normal),
+              "circle3 * scalar keeps the normal");
+  TEST_ASSERT(near((T(2) * c).radius, T(4)) && near((c / T(-2)).radius, T(1)),
+              "scalar * circle3, circle3 / scalar");
+  const auto cp = c.scaledFromPointBy(pivot, 2);
+  TEST_ASSERT(near(cp.center, {1, 3, 5}) && near(cp.radius, T(4)),
+              "circle3 scaledFromPointBy");
+  auto cm = c;
+  TEST_ASSERT(&cm.scaleFromCenterBy(3) == &cm && near(cm.center, c.center) &&
+                  near(cm.radius, T(6)),
+              "circle3 scaleFromCenterBy");
+  cm = c;
+  cm *= T(2);
+  cm /= T(2);
+  TEST_ASSERT(near(cm.radius, c.radius), "circle3 *= and /=");
+
+  const mathlib::Rectangle3<T> r{{1, 1, 1}, {2, 0, 0}, {0, 0, 4}};
+  const auto r2 = r * T(2);
+  TEST_ASSERT(near(r2.corner, {2, 2, 2}) && near(r2.u, {4, 0, 0}) &&
+                  near(r2.area(), 4 * r.area()),
+              "rectangle3 * scalar");
+  TEST_ASSERT(near((T(2) * r).v, r2.v) && near((r2 / T(2)).corner, r.corner),
+              "scalar * rectangle3, rectangle3 / scalar");
+  const auto rc = r.scaledFromCenterBy(2);
+  TEST_ASSERT(near(rc.center(), r.center()) && near(rc.corner, {0, 1, -1}),
+              "rectangle3 scaledFromCenterBy");
+  const auto rk = r.scaledFromCornerBy(2);
+  TEST_ASSERT(near(rk.corner, r.corner) && near(rk.corners()[2], {5, 1, 9}),
+              "rectangle3 scaledFromCornerBy");
+  const auto rn = r.scaledFromCenterBy(-1);
+  TEST_ASSERT(rn.containsPoint(r.corner) && rn.containsPoint(r.corners()[2]),
+              "rectangle3 negative scale covers the same points");
+  auto rm = r;
+  TEST_ASSERT(&rm.scaleFromCornerBy(2) == &rm && near(rm.u, rk.u),
+              "rectangle3 scaleFromCornerBy");
+  rm = r;
+  TEST_ASSERT(&rm.scaleFromPointBy(pivot, 2) == &rm &&
+                  near(rm.corner, r.scaledFromPointBy(pivot, 2).corner),
+              "rectangle3 scaleFromPointBy");
+  rm = r;
+  rm *= T(2);
+  rm /= T(2);
+  TEST_ASSERT(near(rm.v, r.v), "rectangle3 *= and /=");
+}
+
+template <class T> void test_circle3() {
+  TEST_SUITE("Circle3");
+  using C = mathlib::Circle3<T>;
+  using S = mathlib::Sphere<T>;
+  using B = mathlib::Cuboid<T>;
+  using L = mathlib::LineSegment3<T>;
+  using Tri = mathlib::Triangle3<T>;
+  using R = mathlib::Rectangle3<T>;
+  const C c{{0, 0, 0}, 2};
+  const C tilted{{1, 1, 1}, 2, {1, 1, 0}};
+
+  TEST_ASSERT(near(C{}.normal, {0, 0, 1}) && C{}.radius == 0,
+              "defaults to a point facing +z");
+  TEST_ASSERT(near(c.area(), 4 * std::numbers::pi_v<T>), "area");
+  TEST_ASSERT(c.containsPoint({0, 0, 0}) && c.containsPoint({2, 0, 0}),
+              "contains center and rim");
+  TEST_ASSERT(c.containsPoint({1, 1, 0}), "contains inner point");
+  TEST_ASSERT(!c.containsPoint({1, 1, T(0.1)}), "excludes point above");
+  TEST_ASSERT(!c.containsPoint({2, 2, 0}), "excludes point beside");
+  TEST_ASSERT(tilted.containsPoint(Vec3<T>(1, 1, 1) + Vec3<T>(1, -1, 0)) &&
+                  tilted.containsPoint({1, 1, 3}) &&
+                  !tilted.containsPoint({2, 2, 1}),
+              "tilted normal");
+  TEST_ASSERT(near(c.closestPointTo({1, 0, 5}), {1, 0, 0}),
+              "closest point above the disc");
+  TEST_ASSERT(near(c.closestPointTo({6, 0, 3}), {2, 0, 0}),
+              "closest point on the rim");
+  TEST_ASSERT(near(c.closestPointTo({0, 0, -4}), {0, 0, 0}),
+              "closest point on the axis");
+  TEST_ASSERT(near(c.distanceTo(Vec3<T>(5, 0, 4)), T(5)), "distance");
+
+  TEST_ASSERT(intersects(c, S{{0, 0, 1}, T(1.5)}), "cut by sphere");
+  TEST_ASSERT(intersects(c, S{{3, 0, 0}, 1}), "touching sphere at the rim");
+  TEST_ASSERT(!intersects(c, S{{0, 0, 2}, 1}), "sphere above");
+  TEST_ASSERT(!intersects(c, S{{3, 0, 1}, 1}), "sphere beside the rim");
+
+  TEST_ASSERT(intersects(c, L{{1, 1, -1}, {1, 1, 1}}), "pierced by segment");
+  TEST_ASSERT(intersects(c, L{{1, 0, 0}, {1, 0, 4}}),
+              "segment ending on the disc");
+  TEST_ASSERT(intersects(c, L{{-5, 0, 0}, {5, 0, 0}}), "coplanar crossing");
+  TEST_ASSERT(intersects(c, L{{-5, 2, 0}, {5, 2, 0}}), "coplanar tangent");
+  TEST_ASSERT(!intersects(c, L{{2, 2, -1}, {2, 2, 1}}),
+              "through the plane outside");
+  TEST_ASSERT(!intersects(c, L{{-5, 3, 0}, {5, 3, 0}}), "coplanar outside");
+  TEST_ASSERT(!intersects(c, L{{0, 0, 1}, {0, 0, 3}}), "segment above");
+
+  TEST_ASSERT(intersects(c, Tri{{0, 0, -1}, {0, 0, 1}, {5, 0, 0}}),
+              "pierced by triangle");
+  TEST_ASSERT(intersects(c, Tri{{-5, -5, -1}, {5, -5, -1}, {0, 5, 1}}),
+              "crossing a large triangle");
+  TEST_ASSERT(intersects(c, Tri{{1, 1, 0}, {5, 1, 0}, {1, 5, 0}}),
+              "coplanar overlapping");
+  TEST_ASSERT(intersects(c, Tri{{-9, -9, 0}, {9, -9, 0}, {0, 9, 0}}),
+              "coplanar, disc inside the triangle");
+  TEST_ASSERT(!intersects(c, Tri{{2, 2, 0}, {5, 2, 0}, {2, 5, 0}}),
+              "coplanar beside");
+  TEST_ASSERT(!intersects(c, Tri{{3, 0, -1}, {3, 0, 1}, {5, 0, 0}}),
+              "crossing the plane beside the disc");
+
+  TEST_ASSERT(intersects(c, C{{0, 0, 0}, 1, {1, 0, 0}}), "perpendicular discs");
+  TEST_ASSERT(intersects(c, C{{2, 0, 1}, 1, {1, 0, 0}}),
+              "perpendicular, touching");
+  TEST_ASSERT(!intersects(c, C{{0, 0, 2}, 1, {1, 0, 0}}),
+              "perpendicular, not reaching");
+  TEST_ASSERT(!intersects(c, C{{0, 5, 0}, 2, {1, 0, 0}}),
+              "crossing the plane beside the disc");
+  TEST_ASSERT(intersects(c, C{{3, 0, 0}, 1}) && !intersects(c, C{{4, 0, 0}, 1}),
+              "coplanar touching and apart");
+  TEST_ASSERT(intersects(c, C{{1, 0, 0}, 5, {0, 0, -3}}),
+              "coplanar with a flipped, longer normal");
+  TEST_ASSERT(!intersects(c, C{{0, 0, 1}, 2}), "parallel discs");
+
+  TEST_ASSERT(intersects(c, B{{-1, -1, -1}, {1, 1, 1}}), "center in cuboid");
+  TEST_ASSERT(intersects(c, B{{1, 1, -1}, {3, 3, 1}}), "cuboid over the rim");
+  TEST_ASSERT(intersects(c, B{{-1, -1, 0}, {1, 1, 1}}), "lying on a face");
+  TEST_ASSERT(intersects(c, B{{-T(0.5), -T(0.5), -9}, {T(0.5), T(0.5), 9}}),
+              "pierced by a thin cuboid");
+  TEST_ASSERT(!intersects(c, B{{2, 2, -1}, {3, 3, 1}}), "cuboid beside");
+  TEST_ASSERT(!intersects(c, B{{-1, -1, 1}, {1, 1, 2}}), "cuboid above");
+
+  TEST_ASSERT(intersects(c, R{{1, 1, 0}, {3, 0, 0}, {0, 3, 0}}),
+              "coplanar rectangle");
+  TEST_ASSERT(intersects(c, R{{0, -3, -3}, {0, 6, 0}, {0, 0, 6}}),
+              "perpendicular rectangle");
+  TEST_ASSERT(!intersects(c, R{{3, -3, -3}, {0, 6, 0}, {0, 0, 6}}),
+              "rectangle beside");
+}
+
+template <class T> void test_rectangle3() {
+  TEST_SUITE("Rectangle3");
+  using R = mathlib::Rectangle3<T>;
+  using S = mathlib::Sphere<T>;
+  using B = mathlib::Cuboid<T>;
+  using L = mathlib::LineSegment3<T>;
+  using Tri = mathlib::Triangle3<T>;
+  const R r{{0, 0, 0}, {4, 0, 0}, {0, 2, 0}};
+  const R wall{{0, 0, 0}, {0, 2, 0}, {0, 0, 2}};
+
+  const auto corners = r.corners();
+  TEST_ASSERT(near(corners[0], {0, 0, 0}) && near(corners[1], {4, 0, 0}) &&
+                  near(corners[2], {4, 2, 0}) && near(corners[3], {0, 2, 0}),
+              "corners");
+  bool edgesConnect = true;
+  const auto edges = r.edges();
+  for (std::size_t i = 0; i < edges.size(); i++)
+    edgesConnect &= near(edges[i].end, edges[(i + 1) % edges.size()].start);
+  TEST_ASSERT(edgesConnect, "edges form a closed loop");
+  const auto halves = r.triangles();
+  TEST_ASSERT(near(halves[0].area() + halves[1].area(), r.area()),
+              "triangles cover the area");
+  TEST_ASSERT(near(r.center(), {2, 1, 0}), "center");
+  TEST_ASSERT(near(r.normal(), {0, 0, 1}) && near(wall.normal(), {1, 0, 0}),
+              "normal");
+  TEST_ASSERT(near(r.area(), T(8)), "area");
+
+  TEST_ASSERT(r.containsPoint({0, 0, 0}) && r.containsPoint({4, 2, 0}),
+              "contains corners");
+  TEST_ASSERT(r.containsPoint({3, 1, 0}) && r.containsPoint({1, 1, 0}),
+              "contains points on either side of the diagonal");
+  TEST_ASSERT(!r.containsPoint({1, 1, T(0.1)}), "excludes point above");
+  TEST_ASSERT(!r.containsPoint({5, 1, 0}), "excludes point beside");
+  TEST_ASSERT(near(r.closestPointTo({3, 1, 5}), {3, 1, 0}),
+              "closest point above");
+  TEST_ASSERT(near(r.closestPointTo({7, 5, -1}), {4, 2, 0}),
+              "closest point at a corner");
+  TEST_ASSERT(near(wall.distanceTo(Vec3<T>(3, 1, 1)), T(3)), "distance");
+
+  TEST_ASSERT(intersects(r, S{{3, 1, 1}, T(1.5)}), "cut by sphere");
+  TEST_ASSERT(intersects(r, S{{3, 1, 1}, 1}), "touching sphere");
+  TEST_ASSERT(!intersects(r, S{{3, 1, 2}, 1}), "sphere above");
+
+  TEST_ASSERT(intersects(r, L{{3, 1, -1}, {3, 1, 1}}), "pierced by segment");
+  TEST_ASSERT(intersects(r, L{{-1, 1, 0}, {5, 1, 0}}), "coplanar crossing");
+  TEST_ASSERT(!intersects(r, L{{5, 1, -1}, {5, 1, 1}}),
+              "through the plane outside");
+
+  TEST_ASSERT(intersects(r, Tri{{3, 1, -1}, {3, 1, 1}, {9, 9, 0}}),
+              "pierced by triangle");
+  TEST_ASSERT(!intersects(r, Tri{{0, 0, 1}, {4, 0, 1}, {0, 2, 1}}),
+              "parallel triangle");
+
+  TEST_ASSERT(intersects(r, wall), "sharing an edge");
+  TEST_ASSERT(intersects(r, R{{2, -1, -1}, {0, 4, 0}, {0, 0, 2}}),
+              "crossing rectangles");
+  TEST_ASSERT(intersects(r, R{{1, T(0.5), 0}, {1, 0, 0}, {0, 1, 0}}),
+              "coplanar rectangle inside");
+  TEST_ASSERT(!intersects(r, R{{0, 0, 1}, {4, 0, 0}, {0, 2, 0}}),
+              "parallel rectangles");
+
+  TEST_ASSERT(intersects(r, B{{1, T(0.5), -1}, {2, T(1.5), 1}}),
+              "pierced by cuboid");
+  TEST_ASSERT(intersects(r, B{{-1, -1, -1}, {5, 5, 0}}), "lying on a face");
+  TEST_ASSERT(intersects(r, B{{1, T(0.5), 0}, {2, T(1.5), 1}}),
+              "touching a face");
+  TEST_ASSERT(!intersects(r, B{{5, 0, -1}, {6, 2, 1}}), "cuboid beside");
+
+  const auto faces = B{{0, 0, 0}, {1, 2, 3}}.faces();
+  T totalArea = 0;
+  bool facesOnBox = true;
+  for (const auto &face : faces) {
+    totalArea += face.area();
+    for (const auto &corner : face.corners())
+      facesOnBox &= B{{0, 0, 0}, {1, 2, 3}}.containsPoint(corner);
+  }
+  TEST_ASSERT(near(totalArea, T(22)) && facesOnBox, "cuboid faces");
+}
+
+template <class T> void test_lifting_to_3d() {
+  TEST_SUITE("2D shapes placed in 3D");
+  const auto c = mathlib::Circle3<T>::fromCircle({{1, 2}, 3}, 4);
+  TEST_ASSERT(near(c.center, {1, 2, 4}) && near(c.radius, T(3)) &&
+                  near(c.normal, {0, 0, 1}),
+              "fromCircle");
+  const auto r = mathlib::Rectangle3<T>::fromRectangle({{1, 2}, {4, 3}}, -1);
+  TEST_ASSERT(near(r.corner, {1, 2, -1}) && near(r.corners()[2], {4, 3, -1}) &&
+                  near(r.area(), T(3)),
+              "fromRectangle");
+  const auto l = mathlib::LineSegment3<T>::fromLineSegment({{1, 2}, {3, 4}}, 5);
+  TEST_ASSERT(near(l.start, {1, 2, 5}) && near(l.end, {3, 4, 5}),
+              "fromLineSegment");
+  const auto t =
+      mathlib::Triangle3<T>::fromTriangle({{0, 0}, {1, 0}, {0, 1}}, 2);
+  TEST_ASSERT(near(t.b, {1, 0, 2}) && near(t.normal(), {0, 0, 1}),
+              "fromTriangle");
+  TEST_ASSERT(mathlib::Circle3<T>::fromCircle({{0, 0}, 1}).center.z == 0,
+              "z defaults to 0");
+
+  const auto centered = mathlib::Rectangle3<T>::fromCenterAndSides(
+      {1, 1, 1}, {2, 0, 0}, {0, 0, 4});
+  TEST_ASSERT(near(centered.corner, {0, 1, -1}) &&
+                  near(centered.center(), {1, 1, 1}),
+              "fromCenterAndSides");
+}
+
+template <class T> void test_shapes3d_output() {
+  TEST_SUITE("3D shape output");
+  const mathlib::Sphere<T> s{{1, 2, 3}, 4};
+  const mathlib::Cuboid<T> b{{0, 0, 0}, {1, 2, 3}};
+  const mathlib::LineSegment3<T> l{{0, 0, 0}, {1, 2, 3}};
+  const mathlib::Triangle3<T> t{{0, 0, 0}, {1, 0, 0}, {0, 1, 0}};
+  const char *sphere = "Sphere(center: Vec3(1, 2, 3), radius: 4)";
+  const char *cuboid = "Cuboid(min: Vec3(0, 0, 0), max: Vec3(1, 2, 3))";
+  const char *segment =
+      "LineSegment3(start: Vec3(0, 0, 0), end: Vec3(1, 2, 3))";
+  const char *triangle =
+      "Triangle3(a: Vec3(0, 0, 0), b: Vec3(1, 0, 0), c: Vec3(0, 1, 0))";
+  const mathlib::Circle3<T> c{{1, 2, 3}, 4};
+  const mathlib::Rectangle3<T> r{{0, 0, 0}, {1, 0, 0}, {0, 2, 0}};
+  const char *circle =
+      "Circle3(center: Vec3(1, 2, 3), radius: 4, normal: Vec3(0, 0, 1))";
+  const char *rect =
+      "Rectangle3(corner: Vec3(0, 0, 0), u: Vec3(1, 0, 0), v: Vec3(0, 2, 0))";
+  TEST_ASSERT(std::format("{}", c) == circle && streamed(c) == circle,
+              "Circle3");
+  TEST_ASSERT(std::format("{}", r) == rect && streamed(r) == rect,
+              "Rectangle3");
+
+  TEST_ASSERT(std::format("{}", s) == sphere && streamed(s) == sphere,
+              "Sphere");
+  TEST_ASSERT(std::format("{}", b) == cuboid && streamed(b) == cuboid,
+              "Cuboid");
+  TEST_ASSERT(std::format("{}", l) == segment && streamed(l) == segment,
+              "LineSegment3");
+  TEST_ASSERT(std::format("{}", t) == triangle && streamed(t) == triangle,
+              "Triangle3");
+  TEST_ASSERT(std::format("{:.1f}", s) ==
+                  "Sphere(center: Vec3(1.0, 2.0, 3.0), radius: 4.0)",
+              "format spec applies to components");
+}
+
 template <class T> void run_all(const char *type) {
   printf("\n═══ %s ═══\n", type);
   test_vec2_construction<T>();
@@ -1193,6 +1885,18 @@ template <class T> void run_all(const char *type) {
   test_shape_transforms<T>();
   test_anchored_scaling<T>();
   test_shape_output<T>();
+
+  test_sphere<T>();
+  test_cuboid<T>();
+  test_line_segment3<T>();
+  test_triangle3<T>();
+  test_circle3<T>();
+  test_rectangle3<T>();
+  test_lifting_to_3d<T>();
+  test_intersects3d_symmetry<T>();
+  test_shapes3d_factories<T>();
+  test_shapes3d_scaling<T>();
+  test_shapes3d_output<T>();
 }
 
 int main(void) {
