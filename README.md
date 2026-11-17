@@ -37,9 +37,10 @@ int main() {
   shape can be placed in 3D at a given height with `Circle3::fromCircle`,
   `Rectangle3::fromRectangle`, `Triangle3::fromTriangle` and
   `LineSegment3::fromLineSegment`.
-- **Shape queries**: `containsPoint`, closest-point and distance queries, and
-  factory functions such as `Rectangle::fromCenterAndSize`,
-  `Cuboid::fromMinAndSize` and `Triangle::equilateral`.
+- **Shape queries**: `containsPoint`, closest-point and distance queries,
+  `Circle::pointOnCircumference`, and factory functions such as
+  `Rectangle::fromCenterAndSize`, `Cuboid::fromMinAndSize` and
+  `Triangle::equilateral`.
 - **Shape scaling**: every shape scales about the origin with `*`, `/`,
   `scaledBy` and `dividedBy`, and about any point with `scaledFromPointBy`.
   Shapes also scale about a natural anchor: `scaledFromCenterBy` (circles,

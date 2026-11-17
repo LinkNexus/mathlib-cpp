@@ -702,6 +702,36 @@ template <class T> void test_circle() {
               "misses triangle");
   TEST_ASSERT(intersects(C{{4, 1}, 2}, c) == intersects(c, C{{4, 1}, 2}),
               "intersection is symmetric");
+
+  constexpr T pi = std::numbers::pi_v<T>;
+  TEST_ASSERT(near(c.pointOnCircumference(0), {3, 1}),
+              "pointOnCircumference at 0");
+  TEST_ASSERT(near(c.pointOnCircumference(pi / 2), {1, 3}),
+              "pointOnCircumference is counterclockwise");
+  TEST_ASSERT(near(c.pointOnCircumference(pi), {-1, 1}),
+              "pointOnCircumference at pi");
+  TEST_ASSERT(near(c.pointOnCircumference(-pi / 2), {1, -1}),
+              "pointOnCircumference with negative angle");
+  TEST_ASSERT(near(c.pointOnCircumference(2 * pi), {3, 1}),
+              "pointOnCircumference wraps");
+  TEST_ASSERT(near(c.center.distanceTo(c.pointOnCircumference(T(0.7))), T(2)),
+              "pointOnCircumference lies on the circle");
+  TEST_ASSERT(near(C{{1, 1}, 0}.pointOnCircumference(1), {1, 1}),
+              "pointOnCircumference of zero radius");
+
+  TEST_ASSERT(near(c.closestPointTo({7, 1}), {3, 1}), "closest point outside");
+  TEST_ASSERT(near(c.closestPointTo({4, 5}), {T(2.2), T(2.6)}),
+              "closest point outside diagonal");
+  TEST_ASSERT(near(c.closestPointTo({2, 2}), {2, 2}), "closest point inside");
+  TEST_ASSERT(near(c.closestPointTo({1, 1}), {1, 1}), "closest point center");
+  TEST_ASSERT(near(c.closestPointTo({1, -1}), {1, -1}),
+              "closest point on boundary");
+  TEST_ASSERT(near(C{{1, 1}, 0}.closestPointTo({4, 5}), {1, 1}),
+              "closest point of zero radius");
+
+  TEST_ASSERT(near(c.distanceTo({4, 5}), T(3)), "distance to outer point");
+  TEST_ASSERT(near(c.distanceTo({2, 2}), T(0)), "distance to inner point");
+  TEST_ASSERT(near(c.distanceTo({3, 1}), T(0)), "distance to boundary point");
 }
 
 template <class T> void test_rectangle() {

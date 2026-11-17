@@ -697,6 +697,25 @@ template <std::floating_point T> struct Circle {
     return center.distanceSquaredTo(point) <= radius * radius;
   }
 
+  [[nodiscard]]
+  Vec2<T> pointOnCircumference(T angle) const {
+    return center + Vec2<T>::fromAngle(angle, radius);
+  }
+
+  [[nodiscard]]
+  Vec2<T> closestPointTo(const Vec2<T> &point) const {
+    const auto offset = point - center;
+    const auto distance = offset.length();
+    if (distance <= radius)
+      return point;
+    return center + offset * (radius / distance);
+  }
+
+  [[nodiscard]]
+  T distanceTo(const Vec2<T> &point) const {
+    return closestPointTo(point).distanceTo(point);
+  }
+
   friend std::ostream &operator<<(std::ostream &os, const Circle &c) {
     return os << "Circle(center: " << c.center << ", radius: " << c.radius
               << ")";

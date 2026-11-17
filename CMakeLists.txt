@@ -30,10 +30,12 @@ if(MATHLIB_BUILD_TESTS)
   enable_testing()
   set(CTEST_TEST_TIMEOUT 30)
 
+  set(TEST_TARGETS)
   foreach(test_src IN LISTS TEST_SOURCES)
     # Prefixed because CTest reserves the bare target name `test`.
     get_filename_component(test_name "${test_src}" NAME_WE)
     set(test_name "mathlib_${test_name}")
+    list(APPEND TEST_TARGETS "${test_name}")
     add_executable("${test_name}" "${test_src}")
     target_link_libraries("${test_name}" PRIVATE mathlib)
 
@@ -50,4 +52,6 @@ if(MATHLIB_BUILD_TESTS)
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -C $<CONFIG>
     WORKING_DIRECTORY ${PROJECT_BINARY_DIR}
   )
+  # Otherwise `check` runs whatever test binaries were built last.
+  add_dependencies(check ${TEST_TARGETS})
 endif()
