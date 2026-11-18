@@ -881,9 +881,22 @@ template <std::floating_point T> struct Rectangle {
   }
 
   [[nodiscard]]
+  static constexpr Rectangle fromMinAndSize(const Vec2<T> &min,
+                                            const Vec2<T> &size) {
+    return fromCorners(min, min + size);
+  }
+
+  [[nodiscard]]
   static constexpr Rectangle fromCenterAndSize(const Vec2<T> &center, T width,
                                                T height) {
     const Vec2<T> halfSize(width / 2, height / 2);
+    return fromCorners(center - halfSize, center + halfSize);
+  }
+
+  [[nodiscard]]
+  static constexpr Rectangle fromCenterAndSize(const Vec2<T> &center,
+                                               const Vec2<T> &size) {
+    const auto halfSize = size / 2;
     return fromCorners(center - halfSize, center + halfSize);
   }
 
@@ -1727,9 +1740,22 @@ template <std::floating_point T> struct Cuboid {
   }
 
   [[nodiscard]]
+  static constexpr Cuboid fromMinAndSize(const Vec3<T> &min,
+                                         const Vec3<T> &size) {
+    return fromCorners(min, min + size);
+  }
+
+  [[nodiscard]]
   static constexpr Cuboid fromCenterAndSize(const Vec3<T> &center, T width,
                                             T height, T depth) {
     const Vec3<T> halfSize(width / 2, height / 2, depth / 2);
+    return fromCorners(center - halfSize, center + halfSize);
+  }
+
+  [[nodiscard]]
+  static constexpr Cuboid fromCenterAndSize(const Vec3<T> &center,
+                                            const Vec3<T> &size) {
+    const auto halfSize = size / 2;
     return fromCorners(center - halfSize, center + halfSize);
   }
 
