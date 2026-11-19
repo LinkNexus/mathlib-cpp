@@ -966,12 +966,21 @@ template <std::floating_point T> struct Rectangle {
   // Resizes the rectangle about its center by the dimensions given as a 2D
   // vector
   [[nodiscard]]
-  constexpr Rectangle resizeBy(const Vec2<T> &size) const {
+  constexpr Rectangle resizedBy(const Vec2<T> &size) const {
     return fromCenterAndSize(center(), (max - min) * size);
   }
 
   constexpr Rectangle &resizeBy(const Vec2<T> &size) {
     return *this = resizeBy(size);
+  }
+
+  [[nodiscard]]
+  constexpr Rectangle resizedBy(T size) {
+    return resizedBy(Vec2<T>(size, size));
+  }
+
+  constexpr Rectangle &resizeBy(T size) {
+    return resizeBy(Vec2<T>(size, size));
   }
 
   [[nodiscard]]
@@ -1681,12 +1690,21 @@ template <std::floating_point T> struct Rectangle3 {
   constexpr Rectangle3 &scaleBy(T scalar) { return *this = scaledBy(scalar); }
 
   [[nodiscard]]
-  constexpr Rectangle3 resizeBy(const Vec2<T> &size) const {
+  constexpr Rectangle3 resizedBy(const Vec2<T> &size) const {
     return fromCenterAndSides(center(), u * size.x, v * size.y);
   }
 
   constexpr Rectangle3 &resizeBy(const Vec2<T> &size) {
     return *this = resizeBy(size);
+  }
+
+  [[nodiscard]]
+  constexpr Rectangle3 resizedBy(T size) {
+    return resizedBy(Vec2<T>(size, size));
+  }
+
+  constexpr Rectangle3 &resizeBy(T size) {
+    return resizeBy(Vec2<T>(size, size));
   }
 
   [[nodiscard]]
@@ -1872,6 +1890,15 @@ template <std::floating_point T> struct Cuboid {
 
   constexpr Cuboid &resizeBy(const Vec3<T> &size) {
     return *this = resizedBy(size);
+  }
+
+  [[nodiscard]]
+  constexpr Cuboid resizedBy(T size) const {
+    return resizedBy(Vec3<T>(size, size, size));
+  }
+
+  constexpr Cuboid &resizeBy(T size) {
+    return resizeBy(Vec3<T>(size, size, size));
   }
 
   [[nodiscard]]
