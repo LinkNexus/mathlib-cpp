@@ -1918,6 +1918,46 @@ template <class T> void test_cuboid_flattening() {
               "flattenToYZ(x)");
 }
 
+template <class T> void test_rectangle3_flattening() {
+  TEST_SUITE("Rectangle3 flattening");
+  using R3 = mathlib::Rectangle3<T>;
+  using S3 = mathlib::LineSegment3<T>;
+  using V3 = mathlib::Vec3<T>;
+  // Rotated about z so the sides follow no axis.
+  const R3 r{{1, 1, 1}, {3, 3, 0}, {-1, 1, 0}};
+
+  static_assert(std::is_same_v<decltype(r.flattenedToU()), R3>);
+  const auto u0 = r.flattenedToU();
+  TEST_ASSERT(near(u0.corner, r.corner) && near(u0.u, r.u) && near(u0.v, V3()),
+              "flattenedToU keeps u and collapses v onto the corner edge");
+  const auto uMid = r.flattenedToU(T(0.5));
+  TEST_ASSERT(near(uMid.corner, V3(0.5, 1.5, 1)) && near(uMid.u, r.u) &&
+                  near(uMid.center(), r.center()),
+              "flattenedToU at 0.5 passes through the center");
+  const S3 uSeg = r.template flattenedToU<S3>(1);
+  TEST_ASSERT(near(uSeg.start, r.pointAt({0, 1})) &&
+                  near(uSeg.end, r.pointAt({1, 1})),
+              "flattenedToU as a LineSegment3 at 1 is the opposite edge");
+  TEST_ASSERT(near(r.flattenedToU(2).corner, r.pointAt({0, 2})),
+              "flattenedToU outside [0, 1] leaves the rectangle");
+
+  const auto v0 = r.flattenedToV();
+  TEST_ASSERT(near(v0.corner, r.corner) && near(v0.u, V3()) && near(v0.v, r.v),
+              "flattenedToV keeps v and collapses u onto the corner edge");
+  const S3 vSeg = r.template flattenedToV<S3>(T(0.5));
+  TEST_ASSERT(near(vSeg.start, r.pointAt({0.5, 0})) &&
+                  near(vSeg.end, r.pointAt({0.5, 1})),
+              "flattenedToV as a LineSegment3 at 0.5 runs through the middle");
+
+  auto m = r;
+  TEST_ASSERT(&m.flattenToU(T(0.5)) == &m && near(m.corner, uMid.corner) &&
+                  near(m.v, V3()),
+              "flattenToU in place");
+  m = r;
+  TEST_ASSERT(&m.flattenToV() == &m && near(m.u, V3()) && near(m.v, r.v),
+              "flattenToV in place");
+}
+
 template <class T> void test_rectangle_flattening() {
   TEST_SUITE("Rectangle flattening");
   using R = mathlib::Rectangle<T>;
@@ -2162,6 +2202,7 @@ template <class T> void run_all(const char *type) {
   test_point_at<T>();
   test_cuboid_flattening<T>();
   test_rectangle_flattening<T>();
+  test_rectangle3_flattening<T>();
   test_lifting_to_3d<T>();
   test_intersects3d_symmetry<T>();
   test_shapes3d_factories<T>();

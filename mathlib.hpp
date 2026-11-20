@@ -2612,6 +2612,68 @@ template <std::floating_point T> struct Rectangle3 {
     return corner + u * ratios.x + v * ratios.y;
   }
 
+  /// Returns the rectangle flattened across `v`: its `u` side is kept, and its
+  /// `v` side collapses onto the line at `ratio` of the way along it.
+  ///
+  /// `ratio` is measured from `corner` as in `pointAt()`: 0 gives the edge
+  /// from `corner` along `u`, 1 the opposite edge and 0.5 the line through
+  /// `center()`. Values outside [0, 1] give a line outside the rectangle, in
+  /// its plane.
+  ///
+  /// By default the result is a flat `Rectangle3` whose `v` is zero. With
+  /// `Shape` set to `LineSegment3<T>` it is a segment running along `u`:
+  /// `r.flattenedToU<LineSegment3d>(0.5)`.
+  /// @tparam Shape `Rectangle3` (the default) or `LineSegment3<T>`.
+  /// @param ratio Where the result lies along `v`, as a fraction of it.
+  template <class Shape = Rectangle3>
+    requires std::same_as<Shape, Rectangle3> ||
+             std::same_as<Shape, LineSegment3<T>>
+  [[nodiscard]]
+  constexpr Shape flattenedToU(T ratio = 0) const {
+    const Vec3<T> start = corner + v * ratio;
+    if constexpr (std::same_as<Shape, LineSegment3<T>>)
+      return {start, start + u};
+    else
+      return {start, u, Vec3<T>()};
+  }
+
+  /// Same as `flattenedToU(ratio)`, but modifies this rectangle.
+  /// @return A reference to this rectangle.
+  constexpr Rectangle3 &flattenToU(T ratio = 0) {
+    return *this = flattenedToU(ratio);
+  }
+
+  /// Returns the rectangle flattened across `u`: its `v` side is kept, and its
+  /// `u` side collapses onto the line at `ratio` of the way along it.
+  ///
+  /// `ratio` is measured from `corner` as in `pointAt()`: 0 gives the edge
+  /// from `corner` along `v`, 1 the opposite edge and 0.5 the line through
+  /// `center()`. Values outside [0, 1] give a line outside the rectangle, in
+  /// its plane.
+  ///
+  /// By default the result is a flat `Rectangle3` whose `u` is zero. With
+  /// `Shape` set to `LineSegment3<T>` it is a segment running along `v`:
+  /// `r.flattenedToV<LineSegment3d>(0.5)`.
+  /// @tparam Shape `Rectangle3` (the default) or `LineSegment3<T>`.
+  /// @param ratio Where the result lies along `u`, as a fraction of it.
+  template <class Shape = Rectangle3>
+    requires std::same_as<Shape, Rectangle3> ||
+             std::same_as<Shape, LineSegment3<T>>
+  [[nodiscard]]
+  constexpr Shape flattenedToV(T ratio = 0) const {
+    const Vec3<T> start = corner + u * ratio;
+    if constexpr (std::same_as<Shape, LineSegment3<T>>)
+      return {start, start + v};
+    else
+      return {start, Vec3<T>(), v};
+  }
+
+  /// Same as `flattenedToV(ratio)`, but modifies this rectangle.
+  /// @return A reference to this rectangle.
+  constexpr Rectangle3 &flattenToV(T ratio = 0) {
+    return *this = flattenedToV(ratio);
+  }
+
   /// Returns the unit normal, along `u x v`.
   ///
   /// Returns the zero vector for a degenerate rectangle.
