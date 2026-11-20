@@ -110,6 +110,22 @@ template <std::floating_point T> struct Vec2 {
     return *this;
   }
 
+  constexpr Vec2 &set(const Vec2 &other) {
+    x = other.x;
+    y = other.y;
+    return *this;
+  }
+
+  constexpr Vec2 &setX(T newX) {
+    x = newX;
+    return *this;
+  }
+
+  constexpr Vec2 &setY(T newY) {
+    y = newY;
+    return *this;
+  }
+
   [[nodiscard]]
   constexpr std::array<T, 2> toArray() const {
     return {x, y};
@@ -395,10 +411,88 @@ template <std::floating_point T> struct Vec3 {
     return *this;
   }
 
+  constexpr Vec3 &set(const Vec2<T> &vec2, T newZ) {
+    x = vec2.x;
+    y = vec2.y;
+    z = newZ;
+    return *this;
+  }
+
+  constexpr Vec3 &set(const Vec3 &other) {
+    x = other.x;
+    y = other.y;
+    z = other.z;
+    return *this;
+  }
+
+  constexpr Vec3 &setX(T newX) {
+    x = newX;
+    return *this;
+  }
+
+  constexpr Vec3 &setY(T newY) {
+    y = newY;
+    return *this;
+  }
+
+  constexpr Vec3 &setZ(T newZ) {
+    z = newZ;
+    return *this;
+  }
+
+  constexpr Vec3 &setXY(const Vec2<T> &vec2) {
+    x = vec2.x;
+    y = vec2.y;
+    return *this;
+  }
+
+  constexpr Vec3 &setXY(T newX, T newY) {
+    x = newX;
+    y = newY;
+    return *this;
+  }
+
+  constexpr Vec3 &setYZ(const Vec2<T> &vec2) {
+    y = vec2.x;
+    z = vec2.y;
+    return *this;
+  }
+
+  constexpr Vec3 &setYZ(T newY, T newZ) {
+    y = newY;
+    z = newZ;
+    return *this;
+  }
+
+  constexpr Vec3 &setXZ(const Vec2<T> &vec2) {
+    x = vec2.x;
+    z = vec2.y;
+    return *this;
+  }
+
+  constexpr Vec3 &setXZ(T newX, T newZ) {
+    x = newX;
+    z = newZ;
+    return *this;
+  }
+
   [[nodiscard]]
   constexpr Vec2<T> xy() const {
     return {x, y};
   }
+
+  [[nodiscard]]
+  constexpr Vec2<T> xz() const {
+    return {x, z};
+  }
+
+  [[nodiscard]]
+  constexpr Vec2<T> yz() const {
+    return {y, z};
+  }
+
+  // NOTE: This method returns the x and y components, if you want the y and z
+  // components, use yz(), and for x and z, use xz().
   [[nodiscard]]
   constexpr explicit operator Vec2<T>() const {
     return xy();
