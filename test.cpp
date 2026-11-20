@@ -418,6 +418,11 @@ template <class T> void test_vec3_construction() {
   TEST_ASSERT(!Vec3Instantiable<int>, "rejects integral types");
   mathlib::Vec3d d = mathlib::Vec3f(1.5f, -2.25f, 4.f);
   TEST_ASSERT(d.x == 1.5 && d.y == -2.25 && d.z == 4, "float -> double values");
+  TEST_ASSERT(near(mathlib::Vec3d(mathlib::Vec2f(1, 2), 3.0), {1, 2, 3}),
+              "(Vec2, z) constructor with mixed precisions");
+  TEST_ASSERT((std::is_trivially_copyable_v<Vec3<T>> &&
+               std::is_trivially_copyable_v<Vec2<T>>),
+              "trivially copyable");
 
   TEST_ASSERT(near(v.xy(), {1, 2}), "xy()");
   TEST_ASSERT(near(static_cast<Vec2<T>>(v), {1, 2}), "explicit Vec2 cast");
@@ -425,6 +430,12 @@ template <class T> void test_vec3_construction() {
               "Vec3 -> Vec2 is explicit");
 
   TEST_ASSERT(&v.set(7, 8, 9) == &v && near(v, {7, 8, 9}), "set");
+  TEST_ASSERT(near(v.xz(), {7, 9}) && near(v.yz(), {8, 9}), "xz() and yz()");
+  TEST_ASSERT(&v.setXY({1, 2}) == &v && near(v, {1, 2, 9}), "setXY");
+  TEST_ASSERT(&v.setYZ(3, 4) == &v && near(v, {1, 3, 4}), "setYZ");
+  TEST_ASSERT(&v.setXZ({5, 6}) == &v && near(v, {5, 3, 6}), "setXZ");
+  TEST_ASSERT(&v.set(Vec2<T>(1, 2), 3) == &v && near(v, {1, 2, 3}),
+              "set(Vec2, z)");
 }
 
 template <class T> void test_vec3_access() {
@@ -465,6 +476,10 @@ template <class T> void test_vec3_comparison() {
   TEST_ASSERT(!v.isParallelTo({1, 2, 4}, tol<T>()), "not parallel");
   TEST_ASSERT(v.isOrthogonalTo({3, 0, -1}, tol<T>()), "orthogonal");
   TEST_ASSERT(!v.isOrthogonalTo({1, 1, 1}, tol<T>()), "not orthogonal");
+  TEST_ASSERT(
+      v.approxEquals(v + Vec3<T>(mathlib::defaultEpsilon<T> / 2, 0, 0)) &&
+          Vec3<T>(0, T(0.6), T(0.8)).isNormalized() && v.isParallelTo(v * 2),
+      "epsilon defaults to defaultEpsilon");
 }
 
 template <class T> void test_vec3_arithmetic() {
@@ -1733,6 +1748,84 @@ template <class T> void test_circle3() {
               "rectangle beside");
 }
 
+template <class T> void test_shape_resizing() {
+  TEST_SUITE("Shape resizing");
+  using R = mathlib::Rectangle<T>;
+  using R3 = mathlib::Rectangle3<T>;
+  using B = mathlib::Cuboid<T>;
+
+  const auto r = R::fromMinAndSize({0, 0}, 10, 4);
+  auto grown = r.resizedBy({2, 1});
+  TEST_ASSERT(near(grown.max - grown.min, {12, 5}) &&
+                  near(grown.center(), r.center()),
+              "Rectangle resizedBy(Vec2) adds to each side length");
+  TEST_ASSERT(near(r.resizedBy(2).max - r.resizedBy(2).min, {12, 6}),
+              "Rectangle resizedBy(scalar)");
+  auto shrunk = r.resizedBy(-2);
+  TEST_ASSERT(near(shrunk.min, {1, 1}) && near(shrunk.max, {9, 3}),
+              "Rectangle negative delta shrinks");
+  auto rm = r;
+  TEST_ASSERT(&rm.resizeBy(Vec2<T>(2, 1)) == &rm && near(rm.min, grown.min) &&
+                  near(rm.max, grown.max),
+              "Rectangle resizeBy(Vec2) in place");
+  rm = r;
+  TEST_ASSERT(&rm.resizeBy(T(2)) == &rm && near(rm.max - rm.min, {12, 6}),
+              "Rectangle resizeBy(scalar) in place");
+
+  const R3 r3{{0, 0, 0}, {0, 4, 0}, {0, 0, 2}};
+  const auto r3Grown = r3.resizedBy({2, 1});
+  TEST_ASSERT(near(r3Grown.u, {0, 6, 0}) && near(r3Grown.v, {0, 0, 3}) &&
+                  near(r3Grown.center(), r3.center()),
+              "Rectangle3 resizedBy(Vec2) adds to each side length");
+  TEST_ASSERT(near(r3.resizedBy(-1).u, {0, 3, 0}) &&
+                  near(r3.resizedBy(-1).v, {0, 0, 1}),
+              "Rectangle3 resizedBy(scalar)");
+  auto r3m = r3;
+  TEST_ASSERT(&r3m.resizeBy(Vec2<T>(2, 1)) == &r3m &&
+                  near(r3m.corner, r3Grown.corner) && near(r3m.u, r3Grown.u),
+              "Rectangle3 resizeBy(Vec2) in place");
+  r3m = r3;
+  TEST_ASSERT(&r3m.resizeBy(T(2)) == &r3m && near(r3m.u, {0, 6, 0}) &&
+                  near(r3m.v, {0, 0, 4}),
+              "Rectangle3 resizeBy(scalar) in place");
+
+  const auto b = B::fromMinAndSize({0, 0, 0}, 10, 10, 10);
+  const auto bGrown = b.resizedBy(2);
+  TEST_ASSERT(near(bGrown.min, {-1, -1, -1}) && near(bGrown.max, {11, 11, 11}),
+              "Cuboid 10x10x10 resizedBy(2) is 12x12x12 about the center");
+  const auto bMixed = b.resizedBy({2, 0, -4});
+  TEST_ASSERT(near(bMixed.max - bMixed.min, {12, 10, 6}) &&
+                  near(bMixed.center(), b.center()),
+              "Cuboid resizedBy(Vec3)");
+  auto bm = b;
+  TEST_ASSERT(&bm.resizeBy(T(2)) == &bm && near(bm.min, bGrown.min) &&
+                  near(bm.max, bGrown.max),
+              "Cuboid resizeBy in place");
+}
+
+template <class T> void test_cuboid_flattening() {
+  TEST_SUITE("Cuboid flattening");
+  using B = mathlib::Cuboid<T>;
+  const B b{{1, 2, 3}, {4, 6, 8}};
+
+  const auto xy = b.flattenedToXY();
+  TEST_ASSERT(near(xy.min, {1, 2, 3}) && near(xy.max, {4, 6, 3}),
+              "flattenedToXY collapses z onto min.z");
+  const auto xz = b.flattenedToXZ();
+  TEST_ASSERT(near(xz.min, {1, 2, 3}) && near(xz.max, {4, 2, 8}),
+              "flattenedToXZ collapses y onto min.y");
+  const auto yz = b.flattenedToYZ();
+  TEST_ASSERT(near(yz.min, {1, 2, 3}) && near(yz.max, {1, 6, 8}),
+              "flattenedToYZ collapses x onto min.x");
+
+  auto m = b;
+  TEST_ASSERT(&m.flattenToXY() == &m && near(m.max, xy.max), "flattenToXY");
+  m = b;
+  TEST_ASSERT(&m.flattenToXZ() == &m && near(m.max, xz.max), "flattenToXZ");
+  m = b;
+  TEST_ASSERT(&m.flattenToYZ() == &m && near(m.max, yz.max), "flattenToYZ");
+}
+
 template <class T> void test_rectangle3() {
   TEST_SUITE("Rectangle3");
   using R = mathlib::Rectangle3<T>;
@@ -1922,6 +2015,8 @@ template <class T> void run_all(const char *type) {
   test_triangle3<T>();
   test_circle3<T>();
   test_rectangle3<T>();
+  test_shape_resizing<T>();
+  test_cuboid_flattening<T>();
   test_lifting_to_3d<T>();
   test_intersects3d_symmetry<T>();
   test_shapes3d_factories<T>();

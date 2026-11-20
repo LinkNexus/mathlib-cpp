@@ -14,162 +14,251 @@
 #include <ostream>
 
 namespace mathlib {
+/// Converts an angle from degrees to radians.
 template <std::floating_point T>
 [[nodiscard]] constexpr T toRadians(T degrees) {
   return degrees * (std::numbers::pi_v<T> / 180);
 }
 
+/// Converts an angle from radians to degrees.
 template <std::floating_point T>
 [[nodiscard]] constexpr T toDegrees(T radians) {
   return radians * (180 / std::numbers::pi_v<T>);
 }
 
-// All angles used in the following vector structs are in radians.
+/// The default absolute tolerance for checks that would otherwise need exact
+/// floating-point equality: 1024 machine epsilons, about 1e-4 for `float` and
+/// 2e-13 for `double`.
+///
+/// Pass a larger epsilon to such checks when working with large coordinates.
+template <std::floating_point T>
+inline constexpr T defaultEpsilon = std::numeric_limits<T>::epsilon() * 1024;
+
+/// A 2D vector, also used as a point, with components of type `T`.
+///
+/// Angles are in radians and signed: counterclockwise is positive. Methods
+/// named in the past tense (`scaledBy`, `normalized`, ...) return a new vector;
+/// their imperative twins (`scaleBy`, `normalize`, ...) modify this one and
+/// return a reference to it.
+/// @tparam T `float` or `double` (see the `Vec2f` and `Vec2d` aliases).
 template <std::floating_point T> struct Vec2 {
+  /// The x and y components, 0 by default.
   T x{}, y{};
 
+  /// Creates the zero vector.
   constexpr Vec2() = default;
+  /// Creates a vector from its components.
   constexpr Vec2(T x, T y) : x(x), y(y) {}
-  constexpr Vec2(const Vec2 &other) : x(other.x), y(other.y) {}
+  /// Converts from a `Vec2` of another floating-point type.
+  ///
+  /// Implicit when widening (for example from a `Vec2f` to the `double`
+  /// version), `explicit` when narrowing.
   template <std::floating_point U>
   constexpr explicit(sizeof(U) > sizeof(T)) Vec2(const Vec2<U> &other)
       : x(static_cast<T>(other.x)), y(static_cast<T>(other.y)) {}
 
+  /// Returns the zero vector.
   [[nodiscard]] static constexpr Vec2 zero() { return {0, 0}; }
+  /// Returns the vector with every component 1.
   [[nodiscard]] static constexpr Vec2 one() { return {1, 1}; }
+  /// Returns the unit vector along +x.
   [[nodiscard]] static constexpr Vec2 unitX() { return {1, 0}; }
+  /// Returns the unit vector along +y.
   [[nodiscard]] static constexpr Vec2 unitY() { return {0, 1}; }
 
+  /// Returns the vector of the given length pointing at `angle`.
+  /// @param angle In radians, counterclockwise from +x.
+  /// @param length The length of the result; 1 by default.
   [[nodiscard]]
   static Vec2 fromAngle(T angle, T length = 1) {
     return {length * std::cos(angle), length * std::sin(angle)};
   }
 
+  /// Returns the sum of this vector and `other`.
   [[nodiscard]]
   constexpr Vec2 added(const Vec2 &other) const {
     return {x + other.x, y + other.y};
   }
+  /// Returns this vector minus `other`.
   [[nodiscard]]
   constexpr Vec2 subtracted(const Vec2 &other) const {
     return {x - other.x, y - other.y};
   }
+  /// Returns this vector multiplied by `scalar`.
   [[nodiscard]]
   constexpr Vec2 scaledBy(T scalar) const {
     return {x * scalar, y * scalar};
   }
+  /// Returns this vector divided by `scalar`.
+  /// @pre `scalar != 0`, checked by an assertion in debug builds.
   [[nodiscard]]
   constexpr Vec2 dividedBy(T scalar) const {
     assert(scalar != 0 && "Cannot divide by 0");
     return {x / scalar, y / scalar};
   }
+  /// Returns the component-wise product of this vector and `other`.
   [[nodiscard]]
   constexpr Vec2 scaledBy(const Vec2 &other) const {
     return {x * other.x, y * other.y};
   }
 
+  /// Adds `other` to this vector.
+  /// @return A reference to this vector.
   constexpr Vec2 &add(const Vec2 &other) { return *this = added(other); }
+  /// Subtracts `other` from this vector.
+  /// @return A reference to this vector.
   constexpr Vec2 &subtract(const Vec2 &other) {
     return *this = subtracted(other);
   }
+  /// Multiplies this vector by `scalar`.
+  /// @return A reference to this vector.
   constexpr Vec2 &scaleBy(T scalar) { return *this = scaledBy(scalar); }
+  /// Divides this vector by `scalar`.
+  /// @pre `scalar != 0`, checked by an assertion in debug builds.
+  /// @return A reference to this vector.
   constexpr Vec2 &divideBy(T scalar) { return *this = dividedBy(scalar); }
+  /// Multiplies each component by the matching component of `other`.
+  /// @return A reference to this vector.
   constexpr Vec2 &scaleBy(const Vec2 &other) { return *this = scaledBy(other); }
 
+  /// Returns the sum of the two vectors.
   [[nodiscard]]
   constexpr Vec2 operator+(const Vec2 &other) const {
     return added(other);
   }
+  /// Returns the difference of the two vectors.
   [[nodiscard]]
   constexpr Vec2 operator-(const Vec2 &other) const {
     return subtracted(other);
   }
+  /// Returns the vector multiplied by `scalar`.
   [[nodiscard]]
   constexpr Vec2 operator*(T scalar) const {
     return scaledBy(scalar);
   }
+  /// Returns the vector multiplied by `scalar`.
   [[nodiscard]]
   friend constexpr Vec2 operator*(T scalar, const Vec2 &vec) {
     return vec.scaledBy(scalar);
   }
+  /// Returns this vector divided by `scalar`.
+  /// @pre `scalar != 0`, checked by an assertion in debug builds.
   [[nodiscard]]
   constexpr Vec2 operator/(T scalar) const {
     return dividedBy(scalar);
   }
+  /// Returns the vector with every component negated.
   [[nodiscard]]
   constexpr Vec2 operator-() const {
     return {-x, -y};
   }
 
+  /// Adds `other` to this vector.
+  /// @return A reference to this vector.
   constexpr Vec2 &operator+=(const Vec2 &other) { return add(other); }
+  /// Subtracts `other` from this vector.
+  /// @return A reference to this vector.
   constexpr Vec2 &operator-=(const Vec2 &other) { return subtract(other); }
+  /// Multiplies this vector by `scalar`.
+  /// @return A reference to this vector.
   constexpr Vec2 &operator*=(T scalar) { return scaleBy(scalar); }
+  /// Divides this vector by `scalar`.
+  /// @pre `scalar != 0`, checked by an assertion in debug builds.
+  /// @return A reference to this vector.
   constexpr Vec2 &operator/=(T scalar) { return divideBy(scalar); }
 
+  /// Sets every component.
+  /// @return A reference to this vector.
   constexpr Vec2 &set(T newX, T newY) {
     x = newX;
     y = newY;
     return *this;
   }
 
+  /// Copies every component from `other`.
+  /// @return A reference to this vector.
   constexpr Vec2 &set(const Vec2 &other) {
     x = other.x;
     y = other.y;
     return *this;
   }
 
+  /// Sets the x component.
+  /// @return A reference to this vector.
   constexpr Vec2 &setX(T newX) {
     x = newX;
     return *this;
   }
 
+  /// Sets the y component.
+  /// @return A reference to this vector.
   constexpr Vec2 &setY(T newY) {
     y = newY;
     return *this;
   }
 
+  /// Returns the components as an array: {x, y}.
   [[nodiscard]]
   constexpr std::array<T, 2> toArray() const {
     return {x, y};
   }
-  // Relies on x and y being laid out contiguously (checked below), which is
-  // what graphics APIs expect.
+  /// Returns a pointer to the 2 components, laid out contiguously in the order
+  /// x, y, as graphics APIs expect.
   [[nodiscard]]
   const T *data() const {
     return &x;
   }
+  /// Returns a pointer to the 2 components, laid out contiguously in the order
+  /// x, y, as graphics APIs expect.
   [[nodiscard]]
   T *data() {
     return &x;
   }
+  /// Returns the component at `index`: 0 for x, 1 for y.
+  /// @pre `index < 2`, checked by an assertion in debug builds.
   [[nodiscard]]
   constexpr T &operator[](std::size_t index) {
     assert(index < 2 && "Index out of bounds");
     return index == 0 ? x : y;
   }
+  /// Returns the component at `index`: 0 for x, 1 for y.
+  /// @pre `index < 2`, checked by an assertion in debug builds.
   [[nodiscard]]
   constexpr const T &operator[](std::size_t index) const {
     assert(index < 2 && "Index out of bounds");
     return index == 0 ? x : y;
   }
 
+  /// Returns the squared length.
+  ///
+  /// Cheaper than `length()`, and enough for comparing lengths.
   [[nodiscard]]
   constexpr T lengthSquared() const {
     return x * x + y * y;
   }
+  /// Returns the length (the Euclidean norm).
+  ///
+  /// Computed with `std::hypot`, so it avoids needless overflow and underflow.
   [[nodiscard]]
   T length() const {
     return std::hypot(x, y);
   }
 
+  /// Returns the squared distance between this point and `other`.
+  ///
+  /// Cheaper than `distanceTo()`, and enough for comparing distances.
   [[nodiscard]]
   constexpr T distanceSquaredTo(const Vec2 &other) const {
     return (*this - other).lengthSquared();
   }
+  /// Returns the distance between this point and `other`.
   [[nodiscard]]
   T distanceTo(const Vec2 &other) const {
     return (*this - other).length();
   }
 
+  /// Returns the unit vector with the same direction, or the zero vector if
+  /// this one is zero.
   [[nodiscard]]
   Vec2 normalized() const {
     const auto len = length();
@@ -177,60 +266,89 @@ template <std::floating_point T> struct Vec2 {
       return zero();
     return *this / len;
   }
+  /// Same as `normalized()`, but modifies this vector.
+  /// @return A reference to this vector.
   Vec2 &normalize() { return *this = normalized(); }
 
+  /// Returns the dot product with `other`.
   [[nodiscard]]
   constexpr T dotProductWith(const Vec2 &other) const {
     return x * other.x + y * other.y;
   }
 
-  // The z component of the 3D cross product: positive when other is
-  // counterclockwise from this.
+  /// Returns the 2D cross product: the z component of the 3D cross product of
+  /// the two vectors.
+  ///
+  /// Positive when `other` is counterclockwise from this vector, negative when
+  /// clockwise and 0 when they are parallel. Its absolute value is the area of
+  /// the parallelogram they span.
   [[nodiscard]]
   constexpr T crossProductWith(const Vec2 &other) const {
     return x * other.y - y * other.x;
   }
 
-  // The angle is in the range [-pi, pi].
+  /// Returns the angle of this vector, in radians counterclockwise from +x, in
+  /// [-pi, pi].
   [[nodiscard]]
   T toAngle() const {
     return std::atan2(y, x);
   }
 
-  // Signed angle from this to other, in the range [-pi, pi].
+  /// Returns the signed angle from this vector to `other`, in radians, in [-pi,
+  /// pi]: positive when `other` is counterclockwise from this vector.
   [[nodiscard]]
   T angleWith(const Vec2 &other) const {
     return std::atan2(crossProductWith(other), dotProductWith(other));
   }
 
+  /// Returns this vector rotated about the origin.
+  /// @param angle In radians, counterclockwise.
   [[nodiscard]]
   Vec2 rotated(T angle) const {
     const auto cosine = std::cos(angle);
     const auto sine = std::sin(angle);
     return {x * cosine - y * sine, x * sine + y * cosine};
   }
+  /// Same as `rotated()`, but modifies this vector.
+  /// @return A reference to this vector.
   Vec2 &rotate(T angle) { return *this = rotated(angle); }
 
+  /// Returns this vector rotated 90 degrees counterclockwise: (-y, x). It has
+  /// the same length.
   [[nodiscard]]
   constexpr Vec2 perpendicular() const {
     return {-y, x};
   }
 
-  // In 2D the orthonormal is unique up to sign; this one is counterclockwise.
+  /// Returns the unit vector perpendicular to this one, rotated
+  /// counterclockwise.
+  ///
+  /// In 2D it is unique up to sign. Returns the zero vector for the zero
+  /// vector.
   [[nodiscard]]
   Vec2 orthonormal() const {
     return perpendicular().normalized();
   }
 
+  /// Returns the linear interpolation from this vector to `other`.
+  /// @param t 0 gives this vector, 1 gives `other`; values outside [0, 1]
+  /// extrapolate.
   [[nodiscard]]
   Vec2 lerpedWith(const Vec2 &other, T t) const {
     return {std::lerp(x, other.x, t), std::lerp(y, other.y, t)};
   }
+  /// Same as `lerpedWith()`, but modifies this vector.
+  /// @return A reference to this vector.
   Vec2 &lerpWith(const Vec2 &other, T t) {
     return *this = lerpedWith(other, t);
   }
 
-  // Interpolates the direction along the shorter arc and the length linearly.
+  /// Returns the spherical interpolation from this vector to `other`: the
+  /// direction turns along the shorter arc at a constant rate, and the length
+  /// changes linearly.
+  ///
+  /// Falls back to `lerpedWith()` when either vector is zero.
+  /// @param t 0 gives this vector, 1 gives `other`.
   [[nodiscard]]
   Vec2 slerpedWith(const Vec2 &other, T t) const {
     const auto len = length();
@@ -240,10 +358,16 @@ template <std::floating_point T> struct Vec2 {
     return normalized().rotated(angleWith(other) * t) *
            std::lerp(len, otherLen, t);
   }
+  /// Same as `slerpedWith()`, but modifies this vector.
+  /// @return A reference to this vector.
   Vec2 &slerpWith(const Vec2 &other, T t) {
     return *this = slerpedWith(other, t);
   }
 
+  /// Returns the projection of this vector onto `other`: its component along
+  /// `other`'s direction.
+  ///
+  /// Returns the zero vector if `other` is zero.
   [[nodiscard]]
   constexpr Vec2 projectedOnto(const Vec2 &other) const {
     const auto otherLengthSquared = other.lengthSquared();
@@ -251,19 +375,32 @@ template <std::floating_point T> struct Vec2 {
       return zero();
     return other * (dotProductWith(other) / otherLengthSquared);
   }
+  /// Same as `projectedOnto()`, but modifies this vector.
+  /// @return A reference to this vector.
   constexpr Vec2 &projectOnto(const Vec2 &other) {
     return *this = projectedOnto(other);
   }
 
+  /// Returns this vector reflected off a surface with the given normal, like a
+  /// ball bouncing off a wall.
+  /// @param normal Need not be unit length. If it is zero, the vector is
+  /// returned unchanged.
   [[nodiscard]]
   Vec2 reflectedAcross(const Vec2 &normal) const {
     const auto unitNormal = normal.normalized();
     return *this - unitNormal * (2 * dotProductWith(unitNormal));
   }
+  /// Same as `reflectedAcross()`, but modifies this vector.
+  /// @return A reference to this vector.
   Vec2 &reflectAcross(const Vec2 &normal) {
     return *this = reflectedAcross(normal);
   }
 
+  /// Returns this point moved towards `target` by at most `maxDistanceDelta`,
+  /// without overshooting it.
+  ///
+  /// Returns `target` once it is within reach. A negative `maxDistanceDelta`
+  /// moves away from `target`.
   [[nodiscard]]
   Vec2 movedTowards(const Vec2 &target, T maxDistanceDelta) const {
     const auto toTarget = target - *this;
@@ -272,45 +409,60 @@ template <std::floating_point T> struct Vec2 {
       return target;
     return *this + toTarget * (maxDistanceDelta / dist);
   }
+  /// Same as `movedTowards()`, but modifies this vector.
+  /// @return A reference to this vector.
   Vec2 &moveTowards(const Vec2 &target, T maxDistanceDelta) {
     return *this = movedTowards(target, maxDistanceDelta);
   }
 
+  /// Returns whether every component is within `epsilon` of `other`'s.
+  /// @param epsilon The largest allowed difference per component.
   [[nodiscard]]
-  bool approxEquals(const Vec2 &other, T epsilon) const {
+  bool approxEquals(const Vec2 &other, T epsilon = defaultEpsilon<T>) const {
     return std::abs(x - other.x) <= epsilon && std::abs(y - other.y) <= epsilon;
   }
 
+  /// Returns whether the length is at most `epsilon`.
   [[nodiscard]]
-  bool isNearZero(T epsilon) const {
+  bool isNearZero(T epsilon = defaultEpsilon<T>) const {
     return length() <= epsilon;
   }
 
+  /// Returns whether the length is within `epsilon` of 1.
   [[nodiscard]]
-  bool isNormalized(T epsilon) const {
+  bool isNormalized(T epsilon = defaultEpsilon<T>) const {
     return std::abs(length() - 1) <= epsilon;
   }
 
+  /// Returns whether every component is finite (neither infinite nor NaN).
   [[nodiscard]]
   bool isFinite() const {
     return std::isfinite(x) && std::isfinite(y);
   }
 
-  // epsilon bounds |sin| of the angle between the vectors, so the result does
-  // not depend on their lengths. The zero vector is parallel to everything.
+  /// Returns whether the two vectors lie along the same line, pointing the same
+  /// way or opposite ways.
+  ///
+  /// The zero vector is parallel to everything.
+  /// @param epsilon Bounds |sin| of the angle between the vectors, so the
+  /// result does not depend on their lengths.
   [[nodiscard]]
-  bool isParallelTo(const Vec2 &other, T epsilon) const {
+  bool isParallelTo(const Vec2 &other, T epsilon = defaultEpsilon<T>) const {
     return std::abs(normalized().crossProductWith(other.normalized())) <=
            epsilon;
   }
 
-  // epsilon bounds |cos| of the angle between the vectors. The zero vector is
-  // orthogonal to everything.
+  /// Returns whether the two vectors are perpendicular.
+  ///
+  /// The zero vector is orthogonal to everything.
+  /// @param epsilon Bounds |cos| of the angle between the vectors, so the
+  /// result does not depend on their lengths.
   [[nodiscard]]
-  bool isOrthogonalTo(const Vec2 &other, T epsilon) const {
+  bool isOrthogonalTo(const Vec2 &other, T epsilon = defaultEpsilon<T>) const {
     return std::abs(normalized().dotProductWith(other.normalized())) <= epsilon;
   }
 
+  /// Writes the vector as `Vec2(x, y)`.
   friend std::ostream &operator<<(std::ostream &os, const Vec2 &vec) {
     return os << "Vec2(" << vec.x << ", " << vec.y << ")";
   }
@@ -322,90 +474,148 @@ static_assert(sizeof(Vec2<double>) == 2 * sizeof(double));
 using Vec2f = Vec2<float>;
 using Vec2d = Vec2<double>;
 
+/// A 3D vector, also used as a point, with components of type `T`.
+///
+/// Angles are in radians. Unlike `Vec2`, angles between vectors are unsigned,
+/// in [0, pi]. Methods named in the past tense return a new vector; their
+/// imperative twins modify this one and return a reference to it.
+/// @tparam T `float` or `double` (see the `Vec3f` and `Vec3d` aliases).
 template <std::floating_point T> struct Vec3 {
+  /// The x, y and z components, 0 by default.
   T x{}, y{}, z{};
 
+  /// Creates the zero vector.
   constexpr Vec3() = default;
+  /// Creates a vector from its components.
   constexpr Vec3(T x, T y, T z) : x(x), y(y), z(z) {}
+  /// Creates a vector from `vec2`'s x and y and the given z.
   constexpr Vec3(const Vec2<T> &vec2, T z) : x(vec2.x), y(vec2.y), z(z) {}
-  constexpr Vec3(const Vec3 &other) : x(other.x), y(other.y), z(other.z) {}
 
-  template <std::floating_point U>
-  constexpr explicit(sizeof(U) > sizeof(T)) Vec3(const Vec2<U> &vec2, U z)
+  /// Creates a vector from `vec2`'s x and y and the given z, converting from
+  /// other floating-point types.
+  ///
+  /// Implicit when no conversion narrows, `explicit` otherwise.
+  template <std::floating_point U, std::floating_point V>
+  constexpr explicit(sizeof(U) > sizeof(T) || sizeof(V) > sizeof(T))
+      Vec3(const Vec2<U> &vec2, V z)
       : x(static_cast<T>(vec2.x)), y(static_cast<T>(vec2.y)),
         z(static_cast<T>(z)) {}
 
+  /// Converts from a `Vec3` of another floating-point type.
+  ///
+  /// Implicit when widening (for example from a `Vec3f` to the `double`
+  /// version), `explicit` when narrowing.
   template <std::floating_point U>
   constexpr explicit(sizeof(U) > sizeof(T)) Vec3(const Vec3<U> &other)
       : x(static_cast<T>(other.x)), y(static_cast<T>(other.y)),
         z(static_cast<T>(other.z)) {}
 
+  /// Returns the zero vector.
   [[nodiscard]] static constexpr Vec3 zero() { return {0, 0, 0}; }
+  /// Returns the vector with every component 1.
   [[nodiscard]] static constexpr Vec3 one() { return {1, 1, 1}; }
+  /// Returns the unit vector along +x.
   [[nodiscard]] static constexpr Vec3 unitX() { return {1, 0, 0}; }
+  /// Returns the unit vector along +y.
   [[nodiscard]] static constexpr Vec3 unitY() { return {0, 1, 0}; }
+  /// Returns the unit vector along +z.
   [[nodiscard]] static constexpr Vec3 unitZ() { return {0, 0, 1}; }
 
+  /// Returns the sum of this vector and `other`.
   [[nodiscard]]
   constexpr Vec3 added(const Vec3 &other) const {
     return {x + other.x, y + other.y, z + other.z};
   }
+  /// Returns this vector minus `other`.
   [[nodiscard]]
   constexpr Vec3 subtracted(const Vec3 &other) const {
     return {x - other.x, y - other.y, z - other.z};
   }
+  /// Returns this vector multiplied by `scalar`.
   [[nodiscard]]
   constexpr Vec3 scaledBy(T scalar) const {
     return {x * scalar, y * scalar, z * scalar};
   }
+  /// Returns this vector divided by `scalar`.
+  /// @pre `scalar != 0`, checked by an assertion in debug builds.
   [[nodiscard]]
   constexpr Vec3 dividedBy(T scalar) const {
     assert(scalar != 0 && "Cannot divide by 0");
     return {x / scalar, y / scalar, z / scalar};
   }
+  /// Returns the component-wise product of this vector and `other`.
   [[nodiscard]]
   constexpr Vec3 scaledBy(const Vec3 &other) const {
     return {x * other.x, y * other.y, z * other.z};
   }
 
+  /// Adds `other` to this vector.
+  /// @return A reference to this vector.
   constexpr Vec3 &add(const Vec3 &other) { return *this = added(other); }
+  /// Subtracts `other` from this vector.
+  /// @return A reference to this vector.
   constexpr Vec3 &subtract(const Vec3 &other) {
     return *this = subtracted(other);
   }
+  /// Multiplies this vector by `scalar`.
+  /// @return A reference to this vector.
   constexpr Vec3 &scaleBy(T scalar) { return *this = scaledBy(scalar); }
+  /// Divides this vector by `scalar`.
+  /// @pre `scalar != 0`, checked by an assertion in debug builds.
+  /// @return A reference to this vector.
   constexpr Vec3 &divideBy(T scalar) { return *this = dividedBy(scalar); }
+  /// Multiplies each component by the matching component of `other`.
+  /// @return A reference to this vector.
   constexpr Vec3 &scaleBy(const Vec3 &other) { return *this = scaledBy(other); }
 
+  /// Returns the sum of the two vectors.
   [[nodiscard]]
   constexpr Vec3 operator+(const Vec3 &other) const {
     return added(other);
   }
+  /// Returns the difference of the two vectors.
   [[nodiscard]]
   constexpr Vec3 operator-(const Vec3 &other) const {
     return subtracted(other);
   }
+  /// Returns the vector multiplied by `scalar`.
   [[nodiscard]]
   constexpr Vec3 operator*(T scalar) const {
     return scaledBy(scalar);
   }
+  /// Returns the vector multiplied by `scalar`.
   [[nodiscard]]
   friend constexpr Vec3 operator*(T scalar, const Vec3 &vec) {
     return vec.scaledBy(scalar);
   }
+  /// Returns this vector divided by `scalar`.
+  /// @pre `scalar != 0`, checked by an assertion in debug builds.
   [[nodiscard]]
   constexpr Vec3 operator/(T scalar) const {
     return dividedBy(scalar);
   }
+  /// Returns the vector with every component negated.
   [[nodiscard]]
   constexpr Vec3 operator-() const {
     return {-x, -y, -z};
   }
 
+  /// Adds `other` to this vector.
+  /// @return A reference to this vector.
   constexpr Vec3 &operator+=(const Vec3 &other) { return add(other); }
+  /// Subtracts `other` from this vector.
+  /// @return A reference to this vector.
   constexpr Vec3 &operator-=(const Vec3 &other) { return subtract(other); }
+  /// Multiplies this vector by `scalar`.
+  /// @return A reference to this vector.
   constexpr Vec3 &operator*=(T scalar) { return scaleBy(scalar); }
+  /// Divides this vector by `scalar`.
+  /// @pre `scalar != 0`, checked by an assertion in debug builds.
+  /// @return A reference to this vector.
   constexpr Vec3 &operator/=(T scalar) { return divideBy(scalar); }
 
+  /// Sets every component.
+  /// @return A reference to this vector.
   constexpr Vec3 &set(T newX, T newY, T newZ) {
     x = newX;
     y = newY;
@@ -413,6 +623,8 @@ template <std::floating_point T> struct Vec3 {
     return *this;
   }
 
+  /// Sets x and y from `vec2` and z from `newZ`.
+  /// @return A reference to this vector.
   constexpr Vec3 &set(const Vec2<T> &vec2, T newZ) {
     x = vec2.x;
     y = vec2.y;
@@ -420,6 +632,8 @@ template <std::floating_point T> struct Vec3 {
     return *this;
   }
 
+  /// Copies every component from `other`.
+  /// @return A reference to this vector.
   constexpr Vec3 &set(const Vec3 &other) {
     x = other.x;
     y = other.y;
@@ -427,122 +641,163 @@ template <std::floating_point T> struct Vec3 {
     return *this;
   }
 
+  /// Sets the x component.
+  /// @return A reference to this vector.
   constexpr Vec3 &setX(T newX) {
     x = newX;
     return *this;
   }
 
+  /// Sets the y component.
+  /// @return A reference to this vector.
   constexpr Vec3 &setY(T newY) {
     y = newY;
     return *this;
   }
 
+  /// Sets the z component.
+  /// @return A reference to this vector.
   constexpr Vec3 &setZ(T newZ) {
     z = newZ;
     return *this;
   }
 
+  /// Sets x and y from `vec2`'s x and y, in that order.
+  /// @return A reference to this vector.
   constexpr Vec3 &setXY(const Vec2<T> &vec2) {
     x = vec2.x;
     y = vec2.y;
     return *this;
   }
 
+  /// Sets the x and y components.
+  /// @return A reference to this vector.
   constexpr Vec3 &setXY(T newX, T newY) {
     x = newX;
     y = newY;
     return *this;
   }
 
+  /// Sets y and z from `vec2`'s x and y, in that order.
+  /// @return A reference to this vector.
   constexpr Vec3 &setYZ(const Vec2<T> &vec2) {
     y = vec2.x;
     z = vec2.y;
     return *this;
   }
 
+  /// Sets the y and z components.
+  /// @return A reference to this vector.
   constexpr Vec3 &setYZ(T newY, T newZ) {
     y = newY;
     z = newZ;
     return *this;
   }
 
+  /// Sets x and z from `vec2`'s x and y, in that order.
+  /// @return A reference to this vector.
   constexpr Vec3 &setXZ(const Vec2<T> &vec2) {
     x = vec2.x;
     z = vec2.y;
     return *this;
   }
 
+  /// Sets the x and z components.
+  /// @return A reference to this vector.
   constexpr Vec3 &setXZ(T newX, T newZ) {
     x = newX;
     z = newZ;
     return *this;
   }
 
+  /// Returns the x and y components as a `Vec2`.
   [[nodiscard]]
   constexpr Vec2<T> xy() const {
     return {x, y};
   }
 
+  /// Returns the x and z components as a `Vec2` (x, z).
   [[nodiscard]]
   constexpr Vec2<T> xz() const {
     return {x, z};
   }
 
+  /// Returns the y and z components as a `Vec2` (y, z).
   [[nodiscard]]
   constexpr Vec2<T> yz() const {
     return {y, z};
   }
 
-  // NOTE: This method returns the x and y components, if you want the y and z
-  // components, use yz(), and for x and z, use xz().
+  /// Converts to a `Vec2` by dropping z, like `xy()`.
+  ///
+  /// Use `xz()` or `yz()` to keep other components.
   [[nodiscard]]
   constexpr explicit operator Vec2<T>() const {
     return xy();
   }
 
+  /// Returns the components as an array: {x, y, z}.
   [[nodiscard]]
   constexpr std::array<T, 3> toArray() const {
     return {x, y, z};
   }
-  // Relies on x, y and z being laid out contiguously (checked below), which is
-  // what graphics APIs expect.
+  /// Returns a pointer to the 3 components, laid out contiguously in the order
+  /// x, y, z, as graphics APIs expect.
   [[nodiscard]]
   const T *data() const {
     return &x;
   }
+  /// Returns a pointer to the 3 components, laid out contiguously in the order
+  /// x, y, z, as graphics APIs expect.
   [[nodiscard]]
   T *data() {
     return &x;
   }
+  /// Returns the component at `index`: 0 for x, 1 for y, 2 for z.
+  /// @pre `index < 3`, checked by an assertion in debug builds.
   [[nodiscard]]
   constexpr T &operator[](std::size_t index) {
     assert(index < 3 && "Index out of bounds");
     return index == 0 ? x : index == 1 ? y : z;
   }
+  /// Returns the component at `index`: 0 for x, 1 for y, 2 for z.
+  /// @pre `index < 3`, checked by an assertion in debug builds.
   [[nodiscard]]
   constexpr const T &operator[](std::size_t index) const {
     assert(index < 3 && "Index out of bounds");
     return index == 0 ? x : index == 1 ? y : z;
   }
 
+  /// Returns the squared length.
+  ///
+  /// Cheaper than `length()`, and enough for comparing lengths.
   [[nodiscard]]
   constexpr T lengthSquared() const {
     return x * x + y * y + z * z;
   }
+  /// Returns the length (the Euclidean norm).
+  ///
+  /// Computed with `std::hypot`, so it avoids needless overflow and underflow.
   [[nodiscard]]
   T length() const {
     return std::hypot(x, y, z);
   }
 
+  /// Returns the squared distance between this point and `other`.
+  ///
+  /// Cheaper than `distanceTo()`, and enough for comparing distances.
   [[nodiscard]]
   constexpr T distanceSquaredTo(const Vec3 &other) const {
     return (*this - other).lengthSquared();
   }
+  /// Returns the distance between this point and `other`.
   [[nodiscard]]
   T distanceTo(const Vec3 &other) const {
     return (*this - other).length();
   }
 
+  /// Returns the unit vector with the same direction, or the zero vector if
+  /// this one is zero.
   [[nodiscard]]
   Vec3 normalized() const {
     const auto len = length();
@@ -550,26 +805,42 @@ template <std::floating_point T> struct Vec3 {
       return zero();
     return *this / len;
   }
+  /// Same as `normalized()`, but modifies this vector.
+  /// @return A reference to this vector.
   Vec3 &normalize() { return *this = normalized(); }
 
+  /// Returns the dot product with `other`.
   [[nodiscard]]
   constexpr T dotProductWith(const Vec3 &other) const {
     return x * other.x + y * other.y + z * other.z;
   }
 
+  /// Returns the cross product, perpendicular to both vectors by the right-hand
+  /// rule.
+  ///
+  /// Its length is the area of the parallelogram the vectors span; it is zero
+  /// when they are parallel.
   [[nodiscard]]
   constexpr Vec3 crossProductWith(const Vec3 &other) const {
     return {y * other.z - z * other.y, z * other.x - x * other.z,
             x * other.y - y * other.x};
   }
 
-  // Unsigned, in the range [0, pi]: in 3D there is no preferred rotation
-  // direction to give it a sign.
+  /// Returns the angle between this vector and `other`, in radians, in [0, pi].
+  ///
+  /// It is unsigned: in 3D there is no preferred rotation direction to give it
+  /// a sign.
   [[nodiscard]]
   T angleWith(const Vec3 &other) const {
     return std::atan2(crossProductWith(other).length(), dotProductWith(other));
   }
 
+  /// Returns this vector rotated about `axis`, which passes through the origin.
+  ///
+  /// Follows the right-hand rule: the rotation is counterclockwise when `axis`
+  /// points towards the viewer.
+  /// @param axis Must be non-zero; need not be unit length.
+  /// @param angle In radians.
   [[nodiscard]]
   Vec3 rotatedAroundAxis(const Vec3 &axis, T angle) const {
     const auto unitAxis = axis.normalized();
@@ -578,12 +849,17 @@ template <std::floating_point T> struct Vec3 {
     return *this * cosine + unitAxis.crossProductWith(*this) * sine +
            unitAxis * (unitAxis.dotProductWith(*this) * (1 - cosine));
   }
+  /// Same as `rotatedAroundAxis()`, but modifies this vector.
+  /// @return A reference to this vector.
   Vec3 &rotateAroundAxis(const Vec3 &axis, T angle) {
     return *this = rotatedAroundAxis(axis, angle);
   }
 
-  // In 3D there are infinitely many orthonormal vectors; this returns one of
-  // them.
+  /// Returns a unit vector perpendicular to this one.
+  ///
+  /// In 3D there are infinitely many; which one is returned is unspecified, but
+  /// the same input always gives the same result. Returns the zero vector for
+  /// the zero vector.
   [[nodiscard]]
   Vec3 anyOrthonormal() const {
     if (std::abs(x) > std::abs(y))
@@ -591,17 +867,27 @@ template <std::floating_point T> struct Vec3 {
     return Vec3(0, z, -y).normalized();
   }
 
+  /// Returns the linear interpolation from this vector to `other`.
+  /// @param t 0 gives this vector, 1 gives `other`; values outside [0, 1]
+  /// extrapolate.
   [[nodiscard]]
   Vec3 lerpedWith(const Vec3 &other, T t) const {
     return {std::lerp(x, other.x, t), std::lerp(y, other.y, t),
             std::lerp(z, other.z, t)};
   }
+  /// Same as `lerpedWith()`, but modifies this vector.
+  /// @return A reference to this vector.
   Vec3 &lerpWith(const Vec3 &other, T t) {
     return *this = lerpedWith(other, t);
   }
 
-  // Interpolates the direction along the shorter arc and the length linearly.
-  // For opposite vectors any arc is the shortest; one is picked arbitrarily.
+  /// Returns the spherical interpolation from this vector to `other`: the
+  /// direction turns along the shorter arc at a constant rate, and the length
+  /// changes linearly.
+  ///
+  /// For opposite vectors every arc is equally short; one is picked
+  /// arbitrarily. Falls back to `lerpedWith()` when either vector is zero.
+  /// @param t 0 gives this vector, 1 gives `other`.
   [[nodiscard]]
   Vec3 slerpedWith(const Vec3 &other, T t) const {
     const auto len = length();
@@ -620,10 +906,16 @@ template <std::floating_point T> struct Vec3 {
     return from.rotatedAroundAxis(axis, from.angleWith(to) * t) *
            std::lerp(len, otherLen, t);
   }
+  /// Same as `slerpedWith()`, but modifies this vector.
+  /// @return A reference to this vector.
   Vec3 &slerpWith(const Vec3 &other, T t) {
     return *this = slerpedWith(other, t);
   }
 
+  /// Returns the projection of this vector onto `other`: its component along
+  /// `other`'s direction.
+  ///
+  /// Returns the zero vector if `other` is zero.
   [[nodiscard]]
   constexpr Vec3 projectedOnto(const Vec3 &other) const {
     const auto otherLengthSquared = other.lengthSquared();
@@ -631,27 +923,47 @@ template <std::floating_point T> struct Vec3 {
       return zero();
     return other * (dotProductWith(other) / otherLengthSquared);
   }
+  /// Same as `projectedOnto()`, but modifies this vector.
+  /// @return A reference to this vector.
   constexpr Vec3 &projectOnto(const Vec3 &other) {
     return *this = projectedOnto(other);
   }
 
+  /// Returns the projection of this vector onto the plane through the origin
+  /// perpendicular to `planeNormal`: this vector minus its component along the
+  /// normal.
+  /// @param planeNormal Need not be unit length. If it is zero, the vector is
+  /// returned unchanged.
   [[nodiscard]]
   constexpr Vec3 projectedOntoPlane(const Vec3 &planeNormal) const {
     return *this - projectedOnto(planeNormal);
   }
+  /// Same as `projectedOntoPlane()`, but modifies this vector.
+  /// @return A reference to this vector.
   constexpr Vec3 &projectOntoPlane(const Vec3 &planeNormal) {
     return *this = projectedOntoPlane(planeNormal);
   }
 
+  /// Returns this vector reflected off a surface with the given normal, like a
+  /// ball bouncing off a wall.
+  /// @param normal Need not be unit length. If it is zero, the vector is
+  /// returned unchanged.
   [[nodiscard]]
   Vec3 reflectedAcross(const Vec3 &normal) const {
     const auto unitNormal = normal.normalized();
     return *this - unitNormal * (2 * dotProductWith(unitNormal));
   }
+  /// Same as `reflectedAcross()`, but modifies this vector.
+  /// @return A reference to this vector.
   Vec3 &reflectAcross(const Vec3 &normal) {
     return *this = reflectedAcross(normal);
   }
 
+  /// Returns this point moved towards `target` by at most `maxDistanceDelta`,
+  /// without overshooting it.
+  ///
+  /// Returns `target` once it is within reach. A negative `maxDistanceDelta`
+  /// moves away from `target`.
   [[nodiscard]]
   Vec3 movedTowards(const Vec3 &target, T maxDistanceDelta) const {
     const auto toTarget = target - *this;
@@ -660,46 +972,61 @@ template <std::floating_point T> struct Vec3 {
       return target;
     return *this + toTarget * (maxDistanceDelta / dist);
   }
+  /// Same as `movedTowards()`, but modifies this vector.
+  /// @return A reference to this vector.
   Vec3 &moveTowards(const Vec3 &target, T maxDistanceDelta) {
     return *this = movedTowards(target, maxDistanceDelta);
   }
 
+  /// Returns whether every component is within `epsilon` of `other`'s.
+  /// @param epsilon The largest allowed difference per component.
   [[nodiscard]]
-  bool approxEquals(const Vec3 &other, T epsilon) const {
+  bool approxEquals(const Vec3 &other, T epsilon = defaultEpsilon<T>) const {
     return std::abs(x - other.x) <= epsilon &&
            std::abs(y - other.y) <= epsilon && std::abs(z - other.z) <= epsilon;
   }
 
+  /// Returns whether the length is at most `epsilon`.
   [[nodiscard]]
-  bool isNearZero(T epsilon) const {
+  bool isNearZero(T epsilon = defaultEpsilon<T>) const {
     return length() <= epsilon;
   }
 
+  /// Returns whether the length is within `epsilon` of 1.
   [[nodiscard]]
-  bool isNormalized(T epsilon) const {
+  bool isNormalized(T epsilon = defaultEpsilon<T>) const {
     return std::abs(length() - 1) <= epsilon;
   }
 
+  /// Returns whether every component is finite (neither infinite nor NaN).
   [[nodiscard]]
   bool isFinite() const {
     return std::isfinite(x) && std::isfinite(y) && std::isfinite(z);
   }
 
-  // epsilon bounds |sin| of the angle between the vectors, so the result does
-  // not depend on their lengths. The zero vector is parallel to everything.
+  /// Returns whether the two vectors lie along the same line, pointing the same
+  /// way or opposite ways.
+  ///
+  /// The zero vector is parallel to everything.
+  /// @param epsilon Bounds |sin| of the angle between the vectors, so the
+  /// result does not depend on their lengths.
   [[nodiscard]]
-  bool isParallelTo(const Vec3 &other, T epsilon) const {
+  bool isParallelTo(const Vec3 &other, T epsilon = defaultEpsilon<T>) const {
     return normalized().crossProductWith(other.normalized()).length() <=
            epsilon;
   }
 
-  // epsilon bounds |cos| of the angle between the vectors. The zero vector is
-  // orthogonal to everything.
+  /// Returns whether the two vectors are perpendicular.
+  ///
+  /// The zero vector is orthogonal to everything.
+  /// @param epsilon Bounds |cos| of the angle between the vectors, so the
+  /// result does not depend on their lengths.
   [[nodiscard]]
-  bool isOrthogonalTo(const Vec3 &other, T epsilon) const {
+  bool isOrthogonalTo(const Vec3 &other, T epsilon = defaultEpsilon<T>) const {
     return std::abs(normalized().dotProductWith(other.normalized())) <= epsilon;
   }
 
+  /// Writes the vector as `Vec3(x, y, z)`.
   friend std::ostream &operator<<(std::ostream &os, const Vec3 &vec) {
     return os << "Vec3(" << vec.x << ", " << vec.y << ", " << vec.z << ")";
   }
@@ -714,96 +1041,129 @@ using Vec3d = Vec3<double>;
 // Shapes are closed: points on the boundary are contained, and shapes that
 // only touch intersect.
 
-// Absolute distance tolerance for predicates that would otherwise depend on
-// exact floating-point equality.
-template <std::floating_point T>
-inline constexpr T defaultEpsilon = std::numeric_limits<T>::epsilon() * 1024;
-
+/// A solid circle (a disc) in 2D, given by its center and radius.
+///
+/// Like every shape, it is closed: points on the circumference are contained.
+/// `radius` is expected to be non-negative.
 template <std::floating_point T> struct Circle {
+  /// The center.
   Vec2<T> center;
+  /// The radius, 0 by default.
   T radius{};
 
+  /// Creates a degenerate circle with every point at the origin.
   constexpr Circle() = default;
+  /// Creates a circle from its center and radius.
   constexpr Circle(const Vec2<T> &center, T radius)
       : center(center), radius(radius) {}
-  constexpr Circle(const Circle &other)
-      : center(other.center), radius(other.radius) {}
 
-  // a and b are opposite ends of a diameter.
+  /// Returns the circle whose diameter runs from `a` to `b`.
   [[nodiscard]]
   static Circle fromDiameter(const Vec2<T> &a, const Vec2<T> &b) {
     return {a.lerpedWith(b, T{0.5}), a.distanceTo(b) / 2};
   }
 
+  /// Returns the circle centered at `center` whose circumference passes through
+  /// `pointOnCircle`.
   [[nodiscard]]
   static Circle fromCenterAndPoint(const Vec2<T> &center,
                                    const Vec2<T> &pointOnCircle) {
     return {center, center.distanceTo(pointOnCircle)};
   }
 
-  // Scales about point, like scaling every point of the circle.
+  /// Returns the circle scaled by `scalar` about `point`, as if every point `p`
+  /// of it moved to `point + (p - point) * scalar`.
+  ///
+  /// A negative `scalar` also mirrors it through `point`.
   [[nodiscard]]
   constexpr Circle scaledFromPointBy(const Vec2<T> &point, T scalar) const {
     return {point + (center - point) * scalar,
             radius * (scalar < 0 ? -scalar : scalar)};
   }
 
+  /// Same as `scaledFromPointBy()`, but modifies this circle.
+  /// @return A reference to this circle.
   constexpr Circle &scaleFromPointBy(const Vec2<T> &point, T scalar) {
     return *this = scaledFromPointBy(point, scalar);
   }
 
+  /// Returns the circle scaled by `scalar` about its center, which stays in
+  /// place.
+  ///
+  /// Same as `scaledFromPointBy()` with that point.
   [[nodiscard]]
   constexpr Circle scaledFromCenterBy(T scalar) const {
     return scaledFromPointBy(center, scalar);
   }
 
+  /// Same as `scaledFromCenterBy()`, but modifies this circle.
+  /// @return A reference to this circle.
   constexpr Circle &scaleFromCenterBy(T scalar) {
     return *this = scaledFromCenterBy(scalar);
   }
 
-  // Scales about the origin, like scaling every point of the circle.
+  /// Returns the circle scaled by `scalar` about the origin, as if every point
+  /// of it were multiplied by `scalar`.
   [[nodiscard]]
   constexpr Circle scaledBy(T scalar) const {
     return {center * scalar, radius * (scalar < 0 ? -scalar : scalar)};
   }
 
+  /// Same as `scaledBy()`, but modifies this circle.
+  /// @return A reference to this circle.
   constexpr Circle &scaleBy(T scalar) { return *this = scaledBy(scalar); }
 
+  /// Returns the circle scaled by `scalar` about the origin; see `scaledBy()`.
   [[nodiscard]]
   constexpr Circle operator*(T scalar) const {
     return scaledBy(scalar);
   }
 
+  /// Returns the circle scaled by `scalar` about the origin; see `scaledBy()`.
   friend constexpr Circle operator*(T scalar, const Circle &circle) {
     return circle.scaledBy(scalar);
   }
 
+  /// Same as `scaledBy()`, but modifies this circle.
+  /// @return A reference to this circle.
   constexpr Circle &operator*=(T scalar) { return scaleBy(scalar); }
 
+  /// Returns the circle divided by `scalar` about the origin: the same as
+  /// scaling it by `1 / scalar`.
   [[nodiscard]]
   constexpr Circle dividedBy(T scalar) const {
     return {center / scalar, radius / (scalar < 0 ? -scalar : scalar)};
   }
 
+  /// Same as `dividedBy()`, but modifies this circle.
+  /// @return A reference to this circle.
   constexpr Circle &divideBy(T scalar) { return *this = dividedBy(scalar); }
 
+  /// Returns the circle divided by `scalar`; see `dividedBy()`.
   [[nodiscard]]
   constexpr Circle operator/(T scalar) const {
     return dividedBy(scalar);
   }
 
+  /// Same as `dividedBy()`, but modifies this circle.
+  /// @return A reference to this circle.
   constexpr Circle &operator/=(T scalar) { return divideBy(scalar); }
 
+  /// Returns whether `point` lies inside the circle or on its circumference.
   [[nodiscard]]
   constexpr bool containsPoint(const Vec2<T> &point) const {
     return center.distanceSquaredTo(point) <= radius * radius;
   }
 
+  /// Returns the point on the circumference at the given angle.
+  /// @param angle In radians, counterclockwise from +x.
   [[nodiscard]]
   Vec2<T> pointOnCircumference(T angle) const {
     return center + Vec2<T>::fromAngle(angle, radius);
   }
 
+  /// Returns the point of the circle closest to `point`: `point` itself when it
+  /// is inside, otherwise the nearest point on the boundary.
   [[nodiscard]]
   Vec2<T> closestPointTo(const Vec2<T> &point) const {
     const auto offset = point - center;
@@ -813,120 +1173,169 @@ template <std::floating_point T> struct Circle {
     return center + offset * (radius / distance);
   }
 
+  /// Returns the distance from `point` to the circle, 0 when it is inside.
   [[nodiscard]]
   T distanceTo(const Vec2<T> &point) const {
     return closestPointTo(point).distanceTo(point);
   }
 
+  /// Writes the circle as `Circle(center: Vec2(x, y), radius: r)`.
   friend std::ostream &operator<<(std::ostream &os, const Circle &c) {
     return os << "Circle(center: " << c.center << ", radius: " << c.radius
               << ")";
   }
 };
 
+/// A line segment in 2D, running from `start` to `end`.
 template <std::floating_point T> struct LineSegment {
+  /// The first endpoint.
   Vec2<T> start;
+  /// The second endpoint.
   Vec2<T> end;
 
+  /// Creates a degenerate segment with every point at the origin.
   constexpr LineSegment() = default;
+  /// Creates the segment from `start` to `end`.
   constexpr LineSegment(const Vec2<T> &start, const Vec2<T> &end)
       : start(start), end(end) {}
-  constexpr LineSegment(const LineSegment &other)
-      : start(other.start), end(other.end) {}
 
+  /// Returns the segment from `start` to `start + direction`.
   [[nodiscard]]
   static constexpr LineSegment fromStartAndDirection(const Vec2<T> &start,
                                                      const Vec2<T> &direction) {
     return {start, start + direction};
   }
 
+  /// Returns the segment from `start` with the given length, pointing at
+  /// `angle`.
+  /// @param angle In radians, counterclockwise from +x.
   [[nodiscard]]
   static LineSegment fromAngle(const Vec2<T> &start, T angle, T length) {
     return {start, start + Vec2<T>::fromAngle(angle, length)};
   }
 
+  /// Returns the vector from `start` to `end`; its length is the segment's
+  /// length.
   [[nodiscard]]
   constexpr Vec2<T> direction() const {
     return end - start;
   }
+  /// Returns the point halfway between `start` and `end`.
   [[nodiscard]]
   constexpr Vec2<T> midpoint() const {
     return (start + end) / 2;
   }
 
-  // Scales about point, like scaling every point of the segment.
+  /// Returns the segment scaled by `scalar` about `point`, as if every point
+  /// `p` of it moved to `point + (p - point) * scalar`.
+  ///
+  /// A negative `scalar` also mirrors it through `point`.
   [[nodiscard]]
   constexpr LineSegment scaledFromPointBy(const Vec2<T> &point,
                                           T scalar) const {
     return {point + (start - point) * scalar, point + (end - point) * scalar};
   }
 
+  /// Same as `scaledFromPointBy()`, but modifies this segment.
+  /// @return A reference to this segment.
   constexpr LineSegment &scaleFromPointBy(const Vec2<T> &point, T scalar) {
     return *this = scaledFromPointBy(point, scalar);
   }
 
+  /// Returns the segment scaled by `scalar` about `start`, which stays in
+  /// place.
+  ///
+  /// Same as `scaledFromPointBy()` with that point.
   [[nodiscard]]
   constexpr LineSegment scaledFromStartPointBy(T scalar) const {
     return scaledFromPointBy(start, scalar);
   }
 
+  /// Same as `scaledFromStartPointBy()`, but modifies this segment.
+  /// @return A reference to this segment.
   constexpr LineSegment &scaleFromStartPointBy(T scalar) {
     return *this = scaledFromStartPointBy(scalar);
   }
 
+  /// Returns the segment scaled by `scalar` about `end`, which stays in place.
+  ///
+  /// Same as `scaledFromPointBy()` with that point.
   [[nodiscard]]
   constexpr LineSegment scaledFromEndPointBy(T scalar) const {
     return scaledFromPointBy(end, scalar);
   }
 
+  /// Same as `scaledFromEndPointBy()`, but modifies this segment.
+  /// @return A reference to this segment.
   constexpr LineSegment &scaleFromEndPointBy(T scalar) {
     return *this = scaledFromEndPointBy(scalar);
   }
 
+  /// Returns the segment scaled by `scalar` about its midpoint, which stays in
+  /// place.
+  ///
+  /// Same as `scaledFromPointBy()` with that point.
   [[nodiscard]]
   constexpr LineSegment scaledFromCenterBy(T scalar) const {
     return scaledFromPointBy(midpoint(), scalar);
   }
 
+  /// Same as `scaledFromCenterBy()`, but modifies this segment.
+  /// @return A reference to this segment.
   constexpr LineSegment &scaleFromCenterBy(T scalar) {
     return *this = scaledFromCenterBy(scalar);
   }
 
-  // Scales about the origin, like scaling every point of the segment.
+  /// Returns the segment scaled by `scalar` about the origin, as if every point
+  /// of it were multiplied by `scalar`.
   [[nodiscard]]
   constexpr LineSegment scaledBy(T scalar) const {
     return {start * scalar, end * scalar};
   }
 
+  /// Same as `scaledBy()`, but modifies this segment.
+  /// @return A reference to this segment.
   constexpr LineSegment &scaleBy(T scalar) { return *this = scaledBy(scalar); }
 
+  /// Returns the segment scaled by `scalar` about the origin; see `scaledBy()`.
   [[nodiscard]]
   constexpr LineSegment operator*(T scalar) const {
     return scaledBy(scalar);
   }
 
+  /// Returns the segment scaled by `scalar` about the origin; see `scaledBy()`.
   friend constexpr LineSegment operator*(T scalar, const LineSegment &segment) {
     return segment.scaledBy(scalar);
   }
 
+  /// Same as `scaledBy()`, but modifies this segment.
+  /// @return A reference to this segment.
   constexpr LineSegment &operator*=(T scalar) { return scaleBy(scalar); }
 
+  /// Returns the segment divided by `scalar` about the origin: the same as
+  /// scaling it by `1 / scalar`.
   [[nodiscard]]
   constexpr LineSegment dividedBy(T scalar) const {
     return {start / scalar, end / scalar};
   }
 
+  /// Same as `dividedBy()`, but modifies this segment.
+  /// @return A reference to this segment.
   constexpr LineSegment &divideBy(T scalar) {
     return *this = dividedBy(scalar);
   }
 
+  /// Returns the segment divided by `scalar`; see `dividedBy()`.
   [[nodiscard]]
   constexpr LineSegment operator/(T scalar) const {
     return dividedBy(scalar);
   }
 
+  /// Same as `dividedBy()`, but modifies this segment.
+  /// @return A reference to this segment.
   constexpr LineSegment &operator/=(T scalar) { return divideBy(scalar); }
 
+  /// Returns the point of the segment closest to `point`.
   [[nodiscard]]
   constexpr Vec2<T> closestPointTo(const Vec2<T> &point) const {
     const auto dir = direction();
@@ -937,11 +1346,14 @@ template <std::floating_point T> struct LineSegment {
     return start + dir * std::clamp(t, T{0}, T{1});
   }
 
+  /// Returns the distance from `point` to the segment.
   [[nodiscard]]
   T distanceTo(const Vec2<T> &point) const {
     return closestPointTo(point).distanceTo(point);
   }
 
+  /// Returns the shortest distance between the two segments, 0 when they cross
+  /// or touch.
   [[nodiscard]]
   T distanceTo(const LineSegment &other) const {
     const auto dir = direction();
@@ -958,48 +1370,70 @@ template <std::floating_point T> struct LineSegment {
                      other.distanceTo(start), other.distanceTo(end)});
   }
 
+  /// Returns whether `point` lies on the segment, within `epsilon`.
+  /// @param epsilon The largest distance from it that still counts.
   [[nodiscard]]
   bool containsPoint(const Vec2<T> &point,
                      T epsilon = defaultEpsilon<T>) const {
     return distanceTo(point) <= epsilon;
   }
 
+  /// Writes the segment as `LineSegment(start: Vec2(...), end: Vec2(...))`.
   friend std::ostream &operator<<(std::ostream &os, const LineSegment &l) {
     return os << "LineSegment(start: " << l.start << ", end: " << l.end << ")";
   }
 };
 
-// Expects min <= max on both axes; the factories below guarantee it.
+/// An axis-aligned rectangle in 2D, given by its `min` and `max` corners.
+///
+/// Expects `min <= max` on both axes; the factory functions always produce such
+/// a rectangle, even from negative sizes or unordered corners.
 template <std::floating_point T> struct Rectangle {
+  /// The corner with the smallest coordinates.
   Vec2<T> min;
+  /// The corner with the largest coordinates.
   Vec2<T> max;
 
+  /// Creates a degenerate rectangle with every point at the origin.
   constexpr Rectangle() = default;
+  /// Creates a rectangle from its corners.
+  /// @pre `min <= max` on every axis. Use `fromCorners()` when that is not
+  /// guaranteed.
   constexpr Rectangle(const Vec2<T> &min, const Vec2<T> &max)
       : min(min), max(max) {}
-  constexpr Rectangle(const Rectangle &other)
-      : min(other.min), max(other.max) {}
 
-  // a and b are any two opposite corners.
+  /// Returns the rectangle with `a` and `b` as opposite corners, given in any
+  /// order.
   [[nodiscard]]
   static constexpr Rectangle fromCorners(const Vec2<T> &a, const Vec2<T> &b) {
     return {{std::min(a.x, b.x), std::min(a.y, b.y)},
             {std::max(a.x, b.x), std::max(a.y, b.y)}};
   }
 
-  // A negative width or height extends from min towards -x or -y.
+  /// Returns the rectangle with corner `min` and the given width (along x) and
+  /// height (along y).
+  ///
+  /// A negative width or height extends from `min` towards -x or -y.
   [[nodiscard]]
   static constexpr Rectangle fromMinAndSize(const Vec2<T> &min, T width,
                                             T height) {
     return fromCorners(min, {min.x + width, min.y + height});
   }
 
+  /// Returns the rectangle with corner `min` and the given size (width,
+  /// height).
+  ///
+  /// A negative component extends from `min` towards -x or -y.
   [[nodiscard]]
   static constexpr Rectangle fromMinAndSize(const Vec2<T> &min,
                                             const Vec2<T> &size) {
     return fromCorners(min, min + size);
   }
 
+  /// Returns the rectangle centered at `center` with the given width and
+  /// height.
+  ///
+  /// Negative sizes are treated as their absolute values.
   [[nodiscard]]
   static constexpr Rectangle fromCenterAndSize(const Vec2<T> &center, T width,
                                                T height) {
@@ -1007,6 +1441,9 @@ template <std::floating_point T> struct Rectangle {
     return fromCorners(center - halfSize, center + halfSize);
   }
 
+  /// Returns the rectangle centered at `center` with the given size.
+  ///
+  /// Negative components are treated as their absolute values.
   [[nodiscard]]
   static constexpr Rectangle fromCenterAndSize(const Vec2<T> &center,
                                                const Vec2<T> &size) {
@@ -1014,11 +1451,14 @@ template <std::floating_point T> struct Rectangle {
     return fromCorners(center - halfSize, center + halfSize);
   }
 
+  /// Returns the four corners, counterclockwise from `min`.
   [[nodiscard]]
   constexpr std::array<Vec2<T>, 4> corners() const {
     return {min, Vec2<T>(max.x, min.y), max, Vec2<T>(min.x, max.y)};
   }
 
+  /// Returns the four edges, each running from one corner of `corners()` to the
+  /// next.
   [[nodiscard]]
   constexpr std::array<LineSegment<T>, 4> edges() const {
     const auto c = corners();
@@ -1026,123 +1466,182 @@ template <std::floating_point T> struct Rectangle {
             LineSegment<T>{c[2], c[3]}, LineSegment<T>{c[3], c[0]}};
   }
 
+  /// Returns the center of the rectangle.
   [[nodiscard]]
   constexpr Vec2<T> center() const {
     return (min + max) / 2;
   }
 
-  // Scales about point, like scaling every point of the rectangle.
+  /// Returns the rectangle scaled by `scalar` about `point`, as if every point
+  /// `p` of it moved to `point + (p - point) * scalar`.
+  ///
+  /// A negative `scalar` also mirrors it through `point`.
   [[nodiscard]]
   constexpr Rectangle scaledFromPointBy(const Vec2<T> &point, T scalar) const {
     return fromCorners(point + (min - point) * scalar,
                        point + (max - point) * scalar);
   }
 
+  /// Same as `scaledFromPointBy()`, but modifies this rectangle.
+  /// @return A reference to this rectangle.
   constexpr Rectangle &scaleFromPointBy(const Vec2<T> &point, T scalar) {
     return *this = scaledFromPointBy(point, scalar);
   }
 
+  /// Returns the rectangle scaled by `scalar` about its center, which stays in
+  /// place.
+  ///
+  /// Same as `scaledFromPointBy()` with that point.
   [[nodiscard]]
   constexpr Rectangle scaledFromCenterBy(T scalar) const {
     return scaledFromPointBy(center(), scalar);
   }
 
+  /// Same as `scaledFromCenterBy()`, but modifies this rectangle.
+  /// @return A reference to this rectangle.
   constexpr Rectangle &scaleFromCenterBy(T scalar) {
     return *this = scaledFromCenterBy(scalar);
   }
 
+  /// Returns the rectangle scaled by `scalar` about its `min` corner, which
+  /// stays in place.
+  ///
+  /// Same as `scaledFromPointBy()` with that point.
   [[nodiscard]]
   constexpr Rectangle scaledFromMinBy(T scalar) const {
     return scaledFromPointBy(min, scalar);
   }
 
+  /// Same as `scaledFromMinBy()`, but modifies this rectangle.
+  /// @return A reference to this rectangle.
   constexpr Rectangle &scaleFromMinBy(T scalar) {
     return *this = scaledFromMinBy(scalar);
   }
 
+  /// Returns the rectangle scaled by `scalar` about its `max` corner, which
+  /// stays in place.
+  ///
+  /// Same as `scaledFromPointBy()` with that point.
   [[nodiscard]]
   constexpr Rectangle scaledFromMaxBy(T scalar) const {
     return scaledFromPointBy(max, scalar);
   }
 
+  /// Same as `scaledFromMaxBy()`, but modifies this rectangle.
+  /// @return A reference to this rectangle.
   constexpr Rectangle &scaleFromMaxBy(T scalar) {
     return *this = scaledFromMaxBy(scalar);
   }
 
-  // Scales about the origin, like scaling every point of the rectangle.
+  /// Returns the rectangle scaled by `scalar` about the origin, as if every
+  /// point of it were multiplied by `scalar`.
   [[nodiscard]]
   constexpr Rectangle scaledBy(T scalar) const {
     return fromCorners(min * scalar, max * scalar);
   }
 
+  /// Same as `scaledBy()`, but modifies this rectangle.
+  /// @return A reference to this rectangle.
   constexpr Rectangle &scaleBy(T scalar) { return *this = scaledBy(scalar); }
 
-  // Resizes the rectangle about its center by the dimensions given as a 2D
-  // vector
+  /// Returns the rectangle with its width grown by `delta.x` and its height by
+  /// `delta.y`, keeping its center.
+  ///
+  /// A negative delta shrinks it.
   [[nodiscard]]
-  constexpr Rectangle resizedBy(const Vec2<T> &size) const {
-    return fromCenterAndSize(center(), (max - min) * size);
+  constexpr Rectangle resizedBy(const Vec2<T> &delta) const {
+    return fromCenterAndSize(center(), max - min + delta);
   }
 
-  constexpr Rectangle &resizeBy(const Vec2<T> &size) {
-    return *this = resizeBy(size);
+  /// Same as `resizedBy()`, but modifies this rectangle.
+  /// @return A reference to this rectangle.
+  constexpr Rectangle &resizeBy(const Vec2<T> &delta) {
+    return *this = resizedBy(delta);
   }
 
+  /// Returns the rectangle with its width and height both grown by `size`,
+  /// keeping its center.
+  ///
+  /// A negative `size` shrinks it.
   [[nodiscard]]
-  constexpr Rectangle resizedBy(T size) {
+  constexpr Rectangle resizedBy(T size) const {
     return resizedBy(Vec2<T>(size, size));
   }
 
+  /// Same as `resizedBy()`, but modifies this rectangle.
+  /// @return A reference to this rectangle.
   constexpr Rectangle &resizeBy(T size) {
     return resizeBy(Vec2<T>(size, size));
   }
 
+  /// Returns the rectangle scaled by `scalar` about the origin; see
+  /// `scaledBy()`.
   [[nodiscard]]
   constexpr Rectangle operator*(T scalar) const {
     return scaledBy(scalar);
   }
 
+  /// Returns the rectangle scaled by `scalar` about the origin; see
+  /// `scaledBy()`.
   friend constexpr Rectangle operator*(T scalar, const Rectangle &rect) {
     return rect.scaledBy(scalar);
   }
 
+  /// Same as `scaledBy()`, but modifies this rectangle.
+  /// @return A reference to this rectangle.
   constexpr Rectangle &operator*=(T scalar) { return scaleBy(scalar); }
 
+  /// Returns the rectangle divided by `scalar` about the origin: the same as
+  /// scaling it by `1 / scalar`.
   [[nodiscard]]
   constexpr Rectangle dividedBy(T scalar) const {
     return fromCorners(min / scalar, max / scalar);
   }
 
+  /// Same as `dividedBy()`, but modifies this rectangle.
+  /// @return A reference to this rectangle.
   constexpr Rectangle &divideBy(T scalar) { return *this = dividedBy(scalar); }
 
+  /// Returns the rectangle divided by `scalar`; see `dividedBy()`.
   [[nodiscard]]
   constexpr Rectangle operator/(T scalar) const {
     return dividedBy(scalar);
   }
 
+  /// Same as `dividedBy()`, but modifies this rectangle.
+  /// @return A reference to this rectangle.
   constexpr Rectangle &operator/=(T scalar) { return divideBy(scalar); }
 
+  /// Returns the point of the rectangle closest to `point`: `point` itself when
+  /// it is inside, otherwise the nearest point on the boundary.
   [[nodiscard]]
   constexpr Vec2<T> closestPointTo(const Vec2<T> &point) const {
     return {std::clamp(point.x, min.x, max.x),
             std::clamp(point.y, min.y, max.y)};
   }
 
+  /// Returns whether `point` lies inside the rectangle or on its boundary.
   [[nodiscard]]
   constexpr bool containsPoint(const Vec2<T> &point) const {
     return point.x >= min.x && point.x <= max.x && point.y >= min.y &&
            point.y <= max.y;
   }
 
+  /// Writes the rectangle as `Rectangle(min: Vec2(x, y), max: Vec2(x, y))`.
   friend std::ostream &operator<<(std::ostream &os, const Rectangle &r) {
     return os << "Rectangle(min: " << r.min << ", max: " << r.max << ")";
   }
 };
 
+/// A solid triangle in 2D, given by its vertices in either winding.
 template <std::floating_point T> struct Triangle {
+  /// The vertices.
   Vec2<T> a, b, c;
 
-  // With rotation 0 the first vertex points up (+y) from center.
+  /// Returns the equilateral triangle centered at `center` with sides of length
+  /// `sideLength`, its vertices counterclockwise.
+  /// @param rotation In radians, counterclockwise. With 0, the first vertex
+  /// points up (+y) from `center`.
   [[nodiscard]]
   static Triangle equilateral(const Vec2<T> &center, T sideLength,
                               T rotation = 0) {
@@ -1154,70 +1653,102 @@ template <std::floating_point T> struct Triangle {
             center + Vec2<T>::fromAngle(first + 2 * step, circumradius)};
   }
 
+  /// Returns the three edges: a to b, b to c and c to a.
   [[nodiscard]]
   constexpr std::array<LineSegment<T>, 3> edges() const {
     return {LineSegment<T>{a, b}, LineSegment<T>{b, c}, LineSegment<T>{c, a}};
   }
 
+  /// Returns the centroid: the average of the three vertices.
   [[nodiscard]]
   constexpr Vec2<T> centroid() const {
     return (a + b + c) / 3;
   }
 
-  // Scales about point, like scaling every point of the triangle.
+  /// Returns the triangle scaled by `scalar` about `point`, as if every point
+  /// `p` of it moved to `point + (p - point) * scalar`.
+  ///
+  /// A negative `scalar` also mirrors it through `point`.
   [[nodiscard]]
   constexpr Triangle scaledFromPointBy(const Vec2<T> &point, T scalar) const {
     return {point + (a - point) * scalar, point + (b - point) * scalar,
             point + (c - point) * scalar};
   }
 
+  /// Same as `scaledFromPointBy()`, but modifies this triangle.
+  /// @return A reference to this triangle.
   constexpr Triangle &scaleFromPointBy(const Vec2<T> &point, T scalar) {
     return *this = scaledFromPointBy(point, scalar);
   }
 
+  /// Returns the triangle scaled by `scalar` about its centroid, which stays in
+  /// place.
+  ///
+  /// Same as `scaledFromPointBy()` with that point.
   [[nodiscard]]
   constexpr Triangle scaledFromCentroidBy(T scalar) const {
     return scaledFromPointBy(centroid(), scalar);
   }
 
+  /// Same as `scaledFromCentroidBy()`, but modifies this triangle.
+  /// @return A reference to this triangle.
   constexpr Triangle &scaleFromCentroidBy(T scalar) {
     return *this = scaledFromCentroidBy(scalar);
   }
 
-  // Scales about the origin, like scaling every point of the triangle.
+  /// Returns the triangle scaled by `scalar` about the origin, as if every
+  /// point of it were multiplied by `scalar`.
   [[nodiscard]]
   constexpr Triangle scaledBy(T scalar) const {
     return {a * scalar, b * scalar, c * scalar};
   }
 
+  /// Same as `scaledBy()`, but modifies this triangle.
+  /// @return A reference to this triangle.
   constexpr Triangle &scaleBy(T scalar) { return *this = scaledBy(scalar); }
 
+  /// Returns the triangle scaled by `scalar` about the origin; see
+  /// `scaledBy()`.
   [[nodiscard]]
   constexpr Triangle operator*(T scalar) const {
     return scaledBy(scalar);
   }
 
+  /// Returns the triangle scaled by `scalar` about the origin; see
+  /// `scaledBy()`.
   friend constexpr Triangle operator*(T scalar, const Triangle &triangle) {
     return triangle.scaledBy(scalar);
   }
 
+  /// Same as `scaledBy()`, but modifies this triangle.
+  /// @return A reference to this triangle.
   constexpr Triangle &operator*=(T scalar) { return scaleBy(scalar); }
 
+  /// Returns the triangle divided by `scalar` about the origin: the same as
+  /// scaling it by `1 / scalar`.
   [[nodiscard]]
   constexpr Triangle dividedBy(T scalar) const {
     return {a / scalar, b / scalar, c / scalar};
   }
 
+  /// Same as `dividedBy()`, but modifies this triangle.
+  /// @return A reference to this triangle.
   constexpr Triangle &divideBy(T scalar) { return *this = dividedBy(scalar); }
 
+  /// Returns the triangle divided by `scalar`; see `dividedBy()`.
   [[nodiscard]]
   constexpr Triangle operator/(T scalar) const {
     return dividedBy(scalar);
   }
 
+  /// Same as `dividedBy()`, but modifies this triangle.
+  /// @return A reference to this triangle.
   constexpr Triangle &operator/=(T scalar) { return divideBy(scalar); }
 
-  // Works for either winding.
+  /// Returns whether `point` lies inside the triangle or within `epsilon` of
+  /// its boundary.
+  ///
+  /// Works for either winding and for degenerate triangles.
   [[nodiscard]]
   bool containsPoint(const Vec2<T> &point,
                      T epsilon = defaultEpsilon<T>) const {
@@ -1244,174 +1775,249 @@ template <std::floating_point T> struct Triangle {
     return false;
   }
 
+  /// Writes the triangle as
+  /// `Triangle(a: Vec2(...), b: Vec2(...), c: Vec2(...))`.
   friend std::ostream &operator<<(std::ostream &os, const Triangle &t) {
     return os << "Triangle(a: " << t.a << ", b: " << t.b << ", c: " << t.c
               << ")";
   }
 };
 
+/// A solid sphere (a ball), given by its center and radius.
+///
+/// `radius` is expected to be non-negative.
 template <std::floating_point T> struct Sphere {
+  /// The center.
   Vec3<T> center;
+  /// The radius, 0 by default.
   T radius{};
 
+  /// Creates a degenerate sphere with every point at the origin.
   constexpr Sphere() = default;
+  /// Creates a sphere from its center and radius.
   constexpr Sphere(const Vec3<T> &center, T radius)
       : center(center), radius(radius) {}
-  constexpr Sphere(const Sphere &other)
-      : center(other.center), radius(other.radius) {}
 
-  // a and b are opposite ends of a diameter.
+  /// Returns the sphere whose diameter runs from `a` to `b`.
   [[nodiscard]]
   static Sphere fromDiameter(const Vec3<T> &a, const Vec3<T> &b) {
     return {a.lerpedWith(b, T{0.5}), a.distanceTo(b) / 2};
   }
 
+  /// Returns the sphere centered at `center` whose surface passes through
+  /// `pointOnSphere`.
   [[nodiscard]]
   static Sphere fromCenterAndPoint(const Vec3<T> &center,
                                    const Vec3<T> &pointOnSphere) {
     return {center, center.distanceTo(pointOnSphere)};
   }
 
-  // Scales about point, like scaling every point of the sphere.
+  /// Returns the sphere scaled by `scalar` about `point`, as if every point `p`
+  /// of it moved to `point + (p - point) * scalar`.
+  ///
+  /// A negative `scalar` also mirrors it through `point`.
   [[nodiscard]]
   constexpr Sphere scaledFromPointBy(const Vec3<T> &point, T scalar) const {
     return {point + (center - point) * scalar,
             radius * (scalar < 0 ? -scalar : scalar)};
   }
 
+  /// Same as `scaledFromPointBy()`, but modifies this sphere.
+  /// @return A reference to this sphere.
   constexpr Sphere &scaleFromPointBy(const Vec3<T> &point, T scalar) {
     return *this = scaledFromPointBy(point, scalar);
   }
 
+  /// Returns the sphere scaled by `scalar` about its center, which stays in
+  /// place.
+  ///
+  /// Same as `scaledFromPointBy()` with that point.
   [[nodiscard]]
   constexpr Sphere scaledFromCenterBy(T scalar) const {
     return scaledFromPointBy(center, scalar);
   }
 
+  /// Same as `scaledFromCenterBy()`, but modifies this sphere.
+  /// @return A reference to this sphere.
   constexpr Sphere &scaleFromCenterBy(T scalar) {
     return *this = scaledFromCenterBy(scalar);
   }
 
-  // Scales about the origin, like scaling every point of the sphere.
+  /// Returns the sphere scaled by `scalar` about the origin, as if every point
+  /// of it were multiplied by `scalar`.
   [[nodiscard]]
   constexpr Sphere scaledBy(T scalar) const {
     return {center * scalar, radius * (scalar < 0 ? -scalar : scalar)};
   }
 
+  /// Same as `scaledBy()`, but modifies this sphere.
+  /// @return A reference to this sphere.
   constexpr Sphere &scaleBy(T scalar) { return *this = scaledBy(scalar); }
 
+  /// Returns the sphere scaled by `scalar` about the origin; see `scaledBy()`.
   [[nodiscard]]
   constexpr Sphere operator*(T scalar) const {
     return scaledBy(scalar);
   }
 
+  /// Returns the sphere scaled by `scalar` about the origin; see `scaledBy()`.
   friend constexpr Sphere operator*(T scalar, const Sphere &sphere) {
     return sphere.scaledBy(scalar);
   }
 
+  /// Same as `scaledBy()`, but modifies this sphere.
+  /// @return A reference to this sphere.
   constexpr Sphere &operator*=(T scalar) { return scaleBy(scalar); }
 
+  /// Returns the sphere divided by `scalar` about the origin: the same as
+  /// scaling it by `1 / scalar`.
   [[nodiscard]]
   constexpr Sphere dividedBy(T scalar) const {
     return {center / scalar, radius / (scalar < 0 ? -scalar : scalar)};
   }
 
+  /// Same as `dividedBy()`, but modifies this sphere.
+  /// @return A reference to this sphere.
   constexpr Sphere &divideBy(T scalar) { return *this = dividedBy(scalar); }
 
+  /// Returns the sphere divided by `scalar`; see `dividedBy()`.
   [[nodiscard]]
   constexpr Sphere operator/(T scalar) const {
     return dividedBy(scalar);
   }
 
+  /// Same as `dividedBy()`, but modifies this sphere.
+  /// @return A reference to this sphere.
   constexpr Sphere &operator/=(T scalar) { return divideBy(scalar); }
 
+  /// Returns whether `point` lies inside the sphere or on its surface.
   [[nodiscard]]
   constexpr bool containsPoint(const Vec3<T> &point) const {
     return center.distanceSquaredTo(point) <= radius * radius;
   }
 
+  /// Writes the sphere as `Sphere(center: Vec3(x, y, z), radius: r)`.
   friend std::ostream &operator<<(std::ostream &os, const Sphere &s) {
     return os << "Sphere(center: " << s.center << ", radius: " << s.radius
               << ")";
   }
 };
 
-// A flat disc. normal must be non-zero but need not be unit length.
+/// A flat disc in 3D: the points of the plane through `center` perpendicular to
+/// `normal` that are within `radius` of `center`.
+///
+/// `normal` must be non-zero but need not be unit length.
 template <std::floating_point T> struct Circle3 {
+  /// The center.
   Vec3<T> center;
+  /// The radius, 0 by default.
   T radius{};
+  /// The direction the disc faces, +z by default. Must be non-zero; need not be
+  /// unit length.
   Vec3<T> normal = Vec3<T>::unitZ();
 
+  /// Creates a disc of radius 0 at the origin, facing +z.
   constexpr Circle3() = default;
-  constexpr Circle3(const Vec3<T> &center, T radius, const Vec3<T> &normal)
+  /// Creates a disc from its center, radius and the direction it faces.
+  /// @param normal Must be non-zero; need not be unit length.
+  constexpr Circle3(const Vec3<T> &center, T radius,
+                    const Vec3<T> &normal = Vec3<T>::unitZ())
       : center(center), radius(radius), normal(normal) {}
-  constexpr Circle3(const Circle3 &other)
-      : center(other.center), radius(other.radius), normal(other.normal) {}
 
-  // Places circle in the plane at height z, facing +z.
+  /// Returns `circle` placed in the plane at height `z`, facing +z.
   [[nodiscard]]
   static constexpr Circle3 fromCircle(const Circle<T> &circle, T z = 0) {
     return {{circle.center, z}, circle.radius, Vec3<T>::unitZ()};
   }
 
+  /// Returns the area, pi * radius^2.
   [[nodiscard]]
   T area() const {
     return std::numbers::pi_v<T> * radius * radius;
   }
 
-  // Scales about point, like scaling every point of the circle.
+  /// Returns the disc scaled by `scalar` about `point`, as if every point `p`
+  /// of it moved to `point + (p - point) * scalar`.
+  ///
+  /// A negative `scalar` also mirrors it through `point`. The normal is
+  /// unchanged.
   [[nodiscard]]
   constexpr Circle3 scaledFromPointBy(const Vec3<T> &point, T scalar) const {
     return {point + (center - point) * scalar,
             radius * (scalar < 0 ? -scalar : scalar), normal};
   }
 
+  /// Same as `scaledFromPointBy()`, but modifies this disc.
+  /// @return A reference to this disc.
   constexpr Circle3 &scaleFromPointBy(const Vec3<T> &point, T scalar) {
     return *this = scaledFromPointBy(point, scalar);
   }
 
+  /// Returns the disc scaled by `scalar` about its center, which stays in
+  /// place.
+  ///
+  /// Same as `scaledFromPointBy()` with that point.
   [[nodiscard]]
   constexpr Circle3 scaledFromCenterBy(T scalar) const {
     return scaledFromPointBy(center, scalar);
   }
 
+  /// Same as `scaledFromCenterBy()`, but modifies this disc.
+  /// @return A reference to this disc.
   constexpr Circle3 &scaleFromCenterBy(T scalar) {
     return *this = scaledFromCenterBy(scalar);
   }
 
-  // Scales about the origin, like scaling every point of the circle.
+  /// Returns the disc scaled by `scalar` about the origin, as if every point of
+  /// it were multiplied by `scalar`.
+  ///
+  /// The normal is unchanged.
   [[nodiscard]]
   constexpr Circle3 scaledBy(T scalar) const {
     return {center * scalar, radius * (scalar < 0 ? -scalar : scalar), normal};
   }
 
+  /// Same as `scaledBy()`, but modifies this disc.
+  /// @return A reference to this disc.
   constexpr Circle3 &scaleBy(T scalar) { return *this = scaledBy(scalar); }
 
+  /// Returns the disc scaled by `scalar` about the origin; see `scaledBy()`.
   [[nodiscard]]
   constexpr Circle3 operator*(T scalar) const {
     return scaledBy(scalar);
   }
 
+  /// Returns the disc scaled by `scalar` about the origin; see `scaledBy()`.
   friend constexpr Circle3 operator*(T scalar, const Circle3 &circle) {
     return circle.scaledBy(scalar);
   }
 
+  /// Same as `scaledBy()`, but modifies this disc.
+  /// @return A reference to this disc.
   constexpr Circle3 &operator*=(T scalar) { return scaleBy(scalar); }
 
+  /// Returns the disc divided by `scalar` about the origin: the same as scaling
+  /// it by `1 / scalar`.
   [[nodiscard]]
   constexpr Circle3 dividedBy(T scalar) const {
     return {center / scalar, radius / (scalar < 0 ? -scalar : scalar), normal};
   }
 
+  /// Same as `dividedBy()`, but modifies this disc.
+  /// @return A reference to this disc.
   constexpr Circle3 &divideBy(T scalar) { return *this = dividedBy(scalar); }
 
+  /// Returns the disc divided by `scalar`; see `dividedBy()`.
   [[nodiscard]]
   constexpr Circle3 operator/(T scalar) const {
     return dividedBy(scalar);
   }
 
+  /// Same as `dividedBy()`, but modifies this disc.
+  /// @return A reference to this disc.
   constexpr Circle3 &operator/=(T scalar) { return divideBy(scalar); }
 
+  /// Returns the point of the disc closest to `point`.
   [[nodiscard]]
   Vec3<T> closestPointTo(const Vec3<T> &point) const {
     const auto inPlane = (point - center).projectedOntoPlane(normal);
@@ -1421,129 +2027,179 @@ template <std::floating_point T> struct Circle3 {
     return center + inPlane * (radius / distance);
   }
 
+  /// Returns the distance from `point` to the disc.
   [[nodiscard]]
   T distanceTo(const Vec3<T> &point) const {
     return closestPointTo(point).distanceTo(point);
   }
 
+  /// Returns whether `point` lies on the disc, within `epsilon`.
+  ///
+  /// The disc is flat, so points off its plane are not contained.
+  /// @param epsilon The largest distance from it that still counts.
   [[nodiscard]]
   bool containsPoint(const Vec3<T> &point,
                      T epsilon = defaultEpsilon<T>) const {
     return distanceTo(point) <= epsilon;
   }
 
+  /// Writes the disc as `Circle3(center: ..., radius: ..., normal: ...)`.
   friend std::ostream &operator<<(std::ostream &os, const Circle3 &c) {
     return os << "Circle3(center: " << c.center << ", radius: " << c.radius
               << ", normal: " << c.normal << ")";
   }
 };
 
+/// A line segment in 3D, running from `start` to `end`.
 template <std::floating_point T> struct LineSegment3 {
+  /// The first endpoint.
   Vec3<T> start;
+  /// The second endpoint.
   Vec3<T> end;
 
+  /// Creates a degenerate segment with every point at the origin.
   constexpr LineSegment3() = default;
+  /// Creates the segment from `start` to `end`.
   constexpr LineSegment3(const Vec3<T> &start, const Vec3<T> &end)
       : start(start), end(end) {}
-  constexpr LineSegment3(const LineSegment3 &other)
-      : start(other.start), end(other.end) {}
 
+  /// Returns the segment from `start` to `start + direction`.
   [[nodiscard]]
   static constexpr LineSegment3
   fromStartAndDirection(const Vec3<T> &start, const Vec3<T> &direction) {
     return {start, start + direction};
   }
 
-  // Places segment in the plane at height z.
+  /// Returns `segment` placed in the plane at height `z`.
   [[nodiscard]]
   static constexpr LineSegment3 fromLineSegment(const LineSegment<T> &segment,
                                                 T z = 0) {
     return {{segment.start, z}, {segment.end, z}};
   }
 
+  /// Returns the vector from `start` to `end`; its length is the segment's
+  /// length.
   [[nodiscard]]
   constexpr Vec3<T> direction() const {
     return end - start;
   }
+  /// Returns the point halfway between `start` and `end`.
   [[nodiscard]]
   constexpr Vec3<T> midpoint() const {
     return (start + end) / 2;
   }
 
-  // Scales about point, like scaling every point of the segment.
+  /// Returns the segment scaled by `scalar` about `point`, as if every point
+  /// `p` of it moved to `point + (p - point) * scalar`.
+  ///
+  /// A negative `scalar` also mirrors it through `point`.
   [[nodiscard]]
   constexpr LineSegment3 scaledFromPointBy(const Vec3<T> &point,
                                            T scalar) const {
     return {point + (start - point) * scalar, point + (end - point) * scalar};
   }
 
+  /// Same as `scaledFromPointBy()`, but modifies this segment.
+  /// @return A reference to this segment.
   constexpr LineSegment3 &scaleFromPointBy(const Vec3<T> &point, T scalar) {
     return *this = scaledFromPointBy(point, scalar);
   }
 
+  /// Returns the segment scaled by `scalar` about `start`, which stays in
+  /// place.
+  ///
+  /// Same as `scaledFromPointBy()` with that point.
   [[nodiscard]]
   constexpr LineSegment3 scaledFromStartPointBy(T scalar) const {
     return scaledFromPointBy(start, scalar);
   }
 
+  /// Same as `scaledFromStartPointBy()`, but modifies this segment.
+  /// @return A reference to this segment.
   constexpr LineSegment3 &scaleFromStartPointBy(T scalar) {
     return *this = scaledFromStartPointBy(scalar);
   }
 
+  /// Returns the segment scaled by `scalar` about `end`, which stays in place.
+  ///
+  /// Same as `scaledFromPointBy()` with that point.
   [[nodiscard]]
   constexpr LineSegment3 scaledFromEndPointBy(T scalar) const {
     return scaledFromPointBy(end, scalar);
   }
 
+  /// Same as `scaledFromEndPointBy()`, but modifies this segment.
+  /// @return A reference to this segment.
   constexpr LineSegment3 &scaleFromEndPointBy(T scalar) {
     return *this = scaledFromEndPointBy(scalar);
   }
 
+  /// Returns the segment scaled by `scalar` about its midpoint, which stays in
+  /// place.
+  ///
+  /// Same as `scaledFromPointBy()` with that point.
   [[nodiscard]]
   constexpr LineSegment3 scaledFromCenterBy(T scalar) const {
     return scaledFromPointBy(midpoint(), scalar);
   }
 
+  /// Same as `scaledFromCenterBy()`, but modifies this segment.
+  /// @return A reference to this segment.
   constexpr LineSegment3 &scaleFromCenterBy(T scalar) {
     return *this = scaledFromCenterBy(scalar);
   }
 
-  // Scales about the origin, like scaling every point of the segment.
+  /// Returns the segment scaled by `scalar` about the origin, as if every point
+  /// of it were multiplied by `scalar`.
   [[nodiscard]]
   constexpr LineSegment3 scaledBy(T scalar) const {
     return {start * scalar, end * scalar};
   }
 
+  /// Same as `scaledBy()`, but modifies this segment.
+  /// @return A reference to this segment.
   constexpr LineSegment3 &scaleBy(T scalar) { return *this = scaledBy(scalar); }
 
+  /// Returns the segment scaled by `scalar` about the origin; see `scaledBy()`.
   [[nodiscard]]
   constexpr LineSegment3 operator*(T scalar) const {
     return scaledBy(scalar);
   }
 
+  /// Returns the segment scaled by `scalar` about the origin; see `scaledBy()`.
   friend constexpr LineSegment3 operator*(T scalar,
                                           const LineSegment3 &segment) {
     return segment.scaledBy(scalar);
   }
 
+  /// Same as `scaledBy()`, but modifies this segment.
+  /// @return A reference to this segment.
   constexpr LineSegment3 &operator*=(T scalar) { return scaleBy(scalar); }
 
+  /// Returns the segment divided by `scalar` about the origin: the same as
+  /// scaling it by `1 / scalar`.
   [[nodiscard]]
   constexpr LineSegment3 dividedBy(T scalar) const {
     return {start / scalar, end / scalar};
   }
 
+  /// Same as `dividedBy()`, but modifies this segment.
+  /// @return A reference to this segment.
   constexpr LineSegment3 &divideBy(T scalar) {
     return *this = dividedBy(scalar);
   }
 
+  /// Returns the segment divided by `scalar`; see `dividedBy()`.
   [[nodiscard]]
   constexpr LineSegment3 operator/(T scalar) const {
     return dividedBy(scalar);
   }
 
+  /// Same as `dividedBy()`, but modifies this segment.
+  /// @return A reference to this segment.
   constexpr LineSegment3 &operator/=(T scalar) { return divideBy(scalar); }
 
+  /// Returns the point of the segment closest to `point`.
   [[nodiscard]]
   constexpr Vec3<T> closestPointTo(const Vec3<T> &point) const {
     const auto dir = direction();
@@ -1554,16 +2210,19 @@ template <std::floating_point T> struct LineSegment3 {
     return start + dir * std::clamp(t, T{0}, T{1});
   }
 
+  /// Returns the distance from `point` to the segment.
   [[nodiscard]]
   T distanceTo(const Vec3<T> &point) const {
     return closestPointTo(point).distanceTo(point);
   }
 
-  // The squared distance between the two segments is convex, so its minimum is
-  // either where the infinite lines are closest, if that lies on both
-  // segments, or at an endpoint of one of them.
+  /// Returns the shortest distance between the two segments, 0 when they cross
+  /// or touch.
   [[nodiscard]]
   T distanceTo(const LineSegment3 &other) const {
+    // The squared distance between the two segments is convex, so its minimum
+    // is either where the infinite lines are closest, if that lies on both
+    // segments, or at an endpoint of one of them.
     const auto dir = direction();
     const auto otherDir = other.direction();
     const auto offset = start - other.start;
@@ -1585,113 +2244,151 @@ template <std::floating_point T> struct LineSegment3 {
     return distance;
   }
 
+  /// Returns whether `point` lies on the segment, within `epsilon`.
+  /// @param epsilon The largest distance from it that still counts.
   [[nodiscard]]
   bool containsPoint(const Vec3<T> &point,
                      T epsilon = defaultEpsilon<T>) const {
     return distanceTo(point) <= epsilon;
   }
 
+  /// Writes the segment as `LineSegment3(start: Vec3(...), end: Vec3(...))`.
   friend std::ostream &operator<<(std::ostream &os, const LineSegment3 &l) {
     return os << "LineSegment3(start: " << l.start << ", end: " << l.end << ")";
   }
 };
 
+/// A flat, solid triangle in 3D, given by its three vertices.
 template <std::floating_point T> struct Triangle3 {
+  /// The vertices.
   Vec3<T> a, b, c;
 
+  /// Creates a degenerate triangle with every point at the origin.
   constexpr Triangle3() = default;
+  /// Creates a triangle from its vertices.
   constexpr Triangle3(const Vec3<T> &a, const Vec3<T> &b, const Vec3<T> &c)
       : a(a), b(b), c(c) {}
-  constexpr Triangle3(const Triangle3 &other)
-      : a(other.a), b(other.b), c(other.c) {}
 
-  // Places triangle in the plane at height z.
+  /// Returns `triangle` placed in the plane at height `z`.
   [[nodiscard]]
   static constexpr Triangle3 fromTriangle(const Triangle<T> &triangle,
                                           T z = 0) {
     return {{triangle.a, z}, {triangle.b, z}, {triangle.c, z}};
   }
 
+  /// Returns the three edges: a to b, b to c and c to a.
   [[nodiscard]]
   constexpr std::array<LineSegment3<T>, 3> edges() const {
     return {LineSegment3<T>{a, b}, LineSegment3<T>{b, c},
             LineSegment3<T>{c, a}};
   }
 
+  /// Returns the centroid: the average of the three vertices.
   [[nodiscard]]
   constexpr Vec3<T> centroid() const {
     return (a + b + c) / 3;
   }
 
-  // Unit normal, counterclockwise when seen from the side it points to. Zero
-  // for a degenerate triangle.
+  /// Returns the unit normal: it points to the side from which a, b and c
+  /// appear counterclockwise.
+  ///
+  /// Returns the zero vector for a degenerate triangle.
   [[nodiscard]]
   Vec3<T> normal() const {
     return (b - a).crossProductWith(c - a).normalized();
   }
 
+  /// Returns the area.
   [[nodiscard]]
   T area() const {
     return (b - a).crossProductWith(c - a).length() / 2;
   }
 
-  // Scales about point, like scaling every point of the triangle.
+  /// Returns the triangle scaled by `scalar` about `point`, as if every point
+  /// `p` of it moved to `point + (p - point) * scalar`.
+  ///
+  /// A negative `scalar` also mirrors it through `point`.
   [[nodiscard]]
   constexpr Triangle3 scaledFromPointBy(const Vec3<T> &point, T scalar) const {
     return {point + (a - point) * scalar, point + (b - point) * scalar,
             point + (c - point) * scalar};
   }
 
+  /// Same as `scaledFromPointBy()`, but modifies this triangle.
+  /// @return A reference to this triangle.
   constexpr Triangle3 &scaleFromPointBy(const Vec3<T> &point, T scalar) {
     return *this = scaledFromPointBy(point, scalar);
   }
 
+  /// Returns the triangle scaled by `scalar` about its centroid, which stays in
+  /// place.
+  ///
+  /// Same as `scaledFromPointBy()` with that point.
   [[nodiscard]]
   constexpr Triangle3 scaledFromCentroidBy(T scalar) const {
     return scaledFromPointBy(centroid(), scalar);
   }
 
+  /// Same as `scaledFromCentroidBy()`, but modifies this triangle.
+  /// @return A reference to this triangle.
   constexpr Triangle3 &scaleFromCentroidBy(T scalar) {
     return *this = scaledFromCentroidBy(scalar);
   }
 
-  // Scales about the origin, like scaling every point of the triangle.
+  /// Returns the triangle scaled by `scalar` about the origin, as if every
+  /// point of it were multiplied by `scalar`.
   [[nodiscard]]
   constexpr Triangle3 scaledBy(T scalar) const {
     return {a * scalar, b * scalar, c * scalar};
   }
 
+  /// Same as `scaledBy()`, but modifies this triangle.
+  /// @return A reference to this triangle.
   constexpr Triangle3 &scaleBy(T scalar) { return *this = scaledBy(scalar); }
 
+  /// Returns the triangle scaled by `scalar` about the origin; see
+  /// `scaledBy()`.
   [[nodiscard]]
   constexpr Triangle3 operator*(T scalar) const {
     return scaledBy(scalar);
   }
 
+  /// Returns the triangle scaled by `scalar` about the origin; see
+  /// `scaledBy()`.
   friend constexpr Triangle3 operator*(T scalar, const Triangle3 &triangle) {
     return triangle.scaledBy(scalar);
   }
 
+  /// Same as `scaledBy()`, but modifies this triangle.
+  /// @return A reference to this triangle.
   constexpr Triangle3 &operator*=(T scalar) { return scaleBy(scalar); }
 
+  /// Returns the triangle divided by `scalar` about the origin: the same as
+  /// scaling it by `1 / scalar`.
   [[nodiscard]]
   constexpr Triangle3 dividedBy(T scalar) const {
     return {a / scalar, b / scalar, c / scalar};
   }
 
+  /// Same as `dividedBy()`, but modifies this triangle.
+  /// @return A reference to this triangle.
   constexpr Triangle3 &divideBy(T scalar) { return *this = dividedBy(scalar); }
 
+  /// Returns the triangle divided by `scalar`; see `dividedBy()`.
   [[nodiscard]]
   constexpr Triangle3 operator/(T scalar) const {
     return dividedBy(scalar);
   }
 
+  /// Same as `dividedBy()`, but modifies this triangle.
+  /// @return A reference to this triangle.
   constexpr Triangle3 &operator/=(T scalar) { return divideBy(scalar); }
 
-  // Projects onto the plane when that lands inside the triangle, otherwise
-  // takes the closest point on the edges.
+  /// Returns the point of the triangle closest to `point`.
   [[nodiscard]]
   Vec3<T> closestPointTo(const Vec3<T> &point) const {
+    // Projects onto the plane when that lands inside the triangle, otherwise
+    // takes the closest point on the edges.
     const auto n = (b - a).crossProductWith(c - a);
     if (n.lengthSquared() != 0) {
       const auto projected =
@@ -1716,39 +2413,53 @@ template <std::floating_point T> struct Triangle3 {
     return closest;
   }
 
+  /// Returns the distance from `point` to the triangle.
   [[nodiscard]]
   T distanceTo(const Vec3<T> &point) const {
     return closestPointTo(point).distanceTo(point);
   }
 
+  /// Returns whether `point` lies on the triangle, within `epsilon`.
+  ///
+  /// The triangle is flat, so points off its plane are not contained.
+  /// @param epsilon The largest distance from it that still counts.
   [[nodiscard]]
   bool containsPoint(const Vec3<T> &point,
                      T epsilon = defaultEpsilon<T>) const {
     return distanceTo(point) <= epsilon;
   }
 
+  /// Writes the triangle as `Triangle3(a: ..., b: ..., c: ...)`.
   friend std::ostream &operator<<(std::ostream &os, const Triangle3 &t) {
     return os << "Triangle3(a: " << t.a << ", b: " << t.b << ", c: " << t.c
               << ")";
   }
 };
 
-// A flat rectangle with corners corner, corner + u, corner + u + v and
-// corner + v. u and v are expected to be orthogonal; otherwise it is a
-// parallelogram, which every function below still handles.
+/// A flat rectangle in 3D that can face any way, with corners `corner`,
+/// `corner + u`, `corner + u + v` and `corner + v`.
+///
+/// `u` and `v` are expected to be orthogonal; otherwise it is a parallelogram,
+/// which every function still handles.
 template <std::floating_point T> struct Rectangle3 {
+  /// One corner of the rectangle.
   Vec3<T> corner;
+  /// The first side, starting at `corner`.
   Vec3<T> u;
+  /// The second side, starting at `corner`; expected to be orthogonal to `u`.
   Vec3<T> v;
 
+  /// Creates a degenerate rectangle with every point at the origin.
   constexpr Rectangle3() = default;
+  /// Creates a rectangle from a corner and its two sides.
+  /// @param u The first side, starting at `corner`.
+  /// @param v The second side, starting at `corner`; expected to be orthogonal
+  /// to `u`.
   constexpr Rectangle3(const Vec3<T> &corner, const Vec3<T> &u,
                        const Vec3<T> &v)
       : corner(corner), u(u), v(v) {}
-  constexpr Rectangle3(const Rectangle3 &other)
-      : corner(other.corner), u(other.u), v(other.v) {}
 
-  // Places rect in the plane at height z, facing +z.
+  /// Returns `rect` placed in the plane at height `z`, facing +z.
   [[nodiscard]]
   static constexpr Rectangle3 fromRectangle(const Rectangle<T> &rect, T z = 0) {
     return {{rect.min, z},
@@ -1756,6 +2467,7 @@ template <std::floating_point T> struct Rectangle3 {
             {0, rect.max.y - rect.min.y, 0}};
   }
 
+  /// Returns the rectangle centered at `center` with sides `u` and `v`.
   [[nodiscard]]
   static constexpr Rectangle3 fromCenterAndSides(const Vec3<T> &center,
                                                  const Vec3<T> &u,
@@ -1763,11 +2475,15 @@ template <std::floating_point T> struct Rectangle3 {
     return {center - (u + v) / 2, u, v};
   }
 
+  /// Returns the four corners: `corner`, `corner + u`, `corner + u + v` and
+  /// `corner + v`.
   [[nodiscard]]
   constexpr std::array<Vec3<T>, 4> corners() const {
     return {corner, corner + u, corner + u + v, corner + v};
   }
 
+  /// Returns the four edges, each running from one corner of `corners()` to the
+  /// next.
   [[nodiscard]]
   constexpr std::array<LineSegment3<T>, 4> edges() const {
     const auto c = corners();
@@ -1775,108 +2491,159 @@ template <std::floating_point T> struct Rectangle3 {
             LineSegment3<T>{c[2], c[3]}, LineSegment3<T>{c[3], c[0]}};
   }
 
-  // Two triangles that exactly cover the rectangle.
+  /// Returns two triangles that exactly cover the rectangle, split along the
+  /// diagonal from `corner` to `corner + u + v`.
   [[nodiscard]]
   constexpr std::array<Triangle3<T>, 2> triangles() const {
     const auto c = corners();
     return {Triangle3<T>{c[0], c[1], c[2]}, Triangle3<T>{c[0], c[2], c[3]}};
   }
 
+  /// Returns the center of the rectangle.
   [[nodiscard]]
   constexpr Vec3<T> center() const {
     return corner + (u + v) / 2;
   }
 
-  // Unit normal, along u x v. Zero for a degenerate rectangle.
+  /// Returns the unit normal, along `u x v`.
+  ///
+  /// Returns the zero vector for a degenerate rectangle.
   [[nodiscard]]
   Vec3<T> normal() const {
     return u.crossProductWith(v).normalized();
   }
 
+  /// Returns the area, |u x v|.
   [[nodiscard]]
   T area() const {
     return u.crossProductWith(v).length();
   }
 
-  // Scales about point, like scaling every point of the rectangle.
+  /// Returns the rectangle scaled by `scalar` about `point`, as if every point
+  /// `p` of it moved to `point + (p - point) * scalar`.
+  ///
+  /// A negative `scalar` also mirrors it through `point`.
   [[nodiscard]]
   constexpr Rectangle3 scaledFromPointBy(const Vec3<T> &point, T scalar) const {
     return {point + (corner - point) * scalar, u * scalar, v * scalar};
   }
 
+  /// Same as `scaledFromPointBy()`, but modifies this rectangle.
+  /// @return A reference to this rectangle.
   constexpr Rectangle3 &scaleFromPointBy(const Vec3<T> &point, T scalar) {
     return *this = scaledFromPointBy(point, scalar);
   }
 
+  /// Returns the rectangle scaled by `scalar` about its center, which stays in
+  /// place.
+  ///
+  /// Same as `scaledFromPointBy()` with that point.
   [[nodiscard]]
   constexpr Rectangle3 scaledFromCenterBy(T scalar) const {
     return scaledFromPointBy(center(), scalar);
   }
 
+  /// Same as `scaledFromCenterBy()`, but modifies this rectangle.
+  /// @return A reference to this rectangle.
   constexpr Rectangle3 &scaleFromCenterBy(T scalar) {
     return *this = scaledFromCenterBy(scalar);
   }
 
+  /// Returns the rectangle scaled by `scalar` about `corner`, which stays in
+  /// place.
+  ///
+  /// Same as `scaledFromPointBy()` with that point.
   [[nodiscard]]
   constexpr Rectangle3 scaledFromCornerBy(T scalar) const {
     return scaledFromPointBy(corner, scalar);
   }
 
+  /// Same as `scaledFromCornerBy()`, but modifies this rectangle.
+  /// @return A reference to this rectangle.
   constexpr Rectangle3 &scaleFromCornerBy(T scalar) {
     return *this = scaledFromCornerBy(scalar);
   }
 
-  // Scales about the origin, like scaling every point of the rectangle.
+  /// Returns the rectangle scaled by `scalar` about the origin, as if every
+  /// point of it were multiplied by `scalar`.
   [[nodiscard]]
   constexpr Rectangle3 scaledBy(T scalar) const {
     return {corner * scalar, u * scalar, v * scalar};
   }
 
+  /// Same as `scaledBy()`, but modifies this rectangle.
+  /// @return A reference to this rectangle.
   constexpr Rectangle3 &scaleBy(T scalar) { return *this = scaledBy(scalar); }
 
+  /// Returns the rectangle with `u` lengthened by `delta.x` and `v` by
+  /// `delta.y`, keeping its center, normal and orientation.
+  ///
+  /// A negative delta shrinks it. A zero-length side stays zero, since it has
+  /// no direction to grow in.
   [[nodiscard]]
-  constexpr Rectangle3 resizedBy(const Vec2<T> &size) const {
-    return fromCenterAndSides(center(), u * size.x, v * size.y);
+  Rectangle3 resizedBy(const Vec2<T> &delta) const {
+    return fromCenterAndSides(center(), u.normalized() * (u.length() + delta.x),
+                              v.normalized() * (v.length() + delta.y));
   }
 
-  constexpr Rectangle3 &resizeBy(const Vec2<T> &size) {
-    return *this = resizeBy(size);
+  /// Same as `resizedBy()`, but modifies this rectangle.
+  /// @return A reference to this rectangle.
+  Rectangle3 &resizeBy(const Vec2<T> &delta) {
+    return *this = resizedBy(delta);
   }
 
+  /// Returns the rectangle with both sides grown by `size`, keeping its center,
+  /// normal and orientation.
+  ///
+  /// A negative `size` shrinks it.
   [[nodiscard]]
-  constexpr Rectangle3 resizedBy(T size) {
+  Rectangle3 resizedBy(T size) const {
     return resizedBy(Vec2<T>(size, size));
   }
 
-  constexpr Rectangle3 &resizeBy(T size) {
-    return resizeBy(Vec2<T>(size, size));
-  }
+  /// Same as `resizedBy()`, but modifies this rectangle.
+  /// @return A reference to this rectangle.
+  Rectangle3 &resizeBy(T size) { return resizeBy(Vec2<T>(size, size)); }
 
+  /// Returns the rectangle scaled by `scalar` about the origin; see
+  /// `scaledBy()`.
   [[nodiscard]]
   constexpr Rectangle3 operator*(T scalar) const {
     return scaledBy(scalar);
   }
 
+  /// Returns the rectangle scaled by `scalar` about the origin; see
+  /// `scaledBy()`.
   friend constexpr Rectangle3 operator*(T scalar, const Rectangle3 &rect) {
     return rect.scaledBy(scalar);
   }
 
+  /// Same as `scaledBy()`, but modifies this rectangle.
+  /// @return A reference to this rectangle.
   constexpr Rectangle3 &operator*=(T scalar) { return scaleBy(scalar); }
 
+  /// Returns the rectangle divided by `scalar` about the origin: the same as
+  /// scaling it by `1 / scalar`.
   [[nodiscard]]
   constexpr Rectangle3 dividedBy(T scalar) const {
     return {corner / scalar, u / scalar, v / scalar};
   }
 
+  /// Same as `dividedBy()`, but modifies this rectangle.
+  /// @return A reference to this rectangle.
   constexpr Rectangle3 &divideBy(T scalar) { return *this = dividedBy(scalar); }
 
+  /// Returns the rectangle divided by `scalar`; see `dividedBy()`.
   [[nodiscard]]
   constexpr Rectangle3 operator/(T scalar) const {
     return dividedBy(scalar);
   }
 
+  /// Same as `dividedBy()`, but modifies this rectangle.
+  /// @return A reference to this rectangle.
   constexpr Rectangle3 &operator/=(T scalar) { return divideBy(scalar); }
 
+  /// Returns the point of the rectangle closest to `point`.
   [[nodiscard]]
   Vec3<T> closestPointTo(const Vec3<T> &point) const {
     const auto [first, second] = triangles();
@@ -1885,54 +2652,79 @@ template <std::floating_point T> struct Rectangle3 {
     return a.distanceSquaredTo(point) <= b.distanceSquaredTo(point) ? a : b;
   }
 
+  /// Returns the distance from `point` to the rectangle.
   [[nodiscard]]
   T distanceTo(const Vec3<T> &point) const {
     return closestPointTo(point).distanceTo(point);
   }
 
+  /// Returns whether `point` lies on the rectangle, within `epsilon`.
+  ///
+  /// The rectangle is flat, so points off its plane are not contained.
+  /// @param epsilon The largest distance from it that still counts.
   [[nodiscard]]
   bool containsPoint(const Vec3<T> &point,
                      T epsilon = defaultEpsilon<T>) const {
     return distanceTo(point) <= epsilon;
   }
 
+  /// Writes the rectangle as `Rectangle3(corner: ..., u: ..., v: ...)`.
   friend std::ostream &operator<<(std::ostream &os, const Rectangle3 &r) {
     return os << "Rectangle3(corner: " << r.corner << ", u: " << r.u
               << ", v: " << r.v << ")";
   }
 };
 
-// An axis-aligned box. Expects min <= max on every axis; the factories below
-// guarantee it.
+/// An axis-aligned box in 3D, given by its `min` and `max` corners.
+///
+/// Expects `min <= max` on every axis; the factory functions always produce
+/// such a cuboid, even from negative sizes or unordered corners.
 template <std::floating_point T> struct Cuboid {
+  /// The corner with the smallest coordinates.
   Vec3<T> min;
+  /// The corner with the largest coordinates.
   Vec3<T> max;
 
+  /// Creates a degenerate cuboid with every point at the origin.
   constexpr Cuboid() = default;
+  /// Creates a cuboid from its corners.
+  /// @pre `min <= max` on every axis. Use `fromCorners()` when that is not
+  /// guaranteed.
   constexpr Cuboid(const Vec3<T> &min, const Vec3<T> &max)
       : min(min), max(max) {}
-  constexpr Cuboid(const Cuboid &other) : min(other.min), max(other.max) {}
 
-  // a and b are any two opposite corners.
+  /// Returns the cuboid with `a` and `b` as opposite corners, given in any
+  /// order.
   [[nodiscard]]
   static constexpr Cuboid fromCorners(const Vec3<T> &a, const Vec3<T> &b) {
     return {{std::min(a.x, b.x), std::min(a.y, b.y), std::min(a.z, b.z)},
             {std::max(a.x, b.x), std::max(a.y, b.y), std::max(a.z, b.z)}};
   }
 
-  // A negative size extends from min towards the negative axis.
+  /// Returns the cuboid with corner `min` and the given width (along x), height
+  /// (along y) and depth (along z).
+  ///
+  /// A negative size extends from `min` towards the negative axis.
   [[nodiscard]]
   static constexpr Cuboid fromMinAndSize(const Vec3<T> &min, T width, T height,
                                          T depth) {
     return fromCorners(min, {min.x + width, min.y + height, min.z + depth});
   }
 
+  /// Returns the cuboid with corner `min` and the given size (width, height,
+  /// depth).
+  ///
+  /// A negative component extends from `min` towards the negative axis.
   [[nodiscard]]
   static constexpr Cuboid fromMinAndSize(const Vec3<T> &min,
                                          const Vec3<T> &size) {
     return fromCorners(min, min + size);
   }
 
+  /// Returns the cuboid centered at `center` with the given width, height and
+  /// depth.
+  ///
+  /// Negative sizes are treated as their absolute values.
   [[nodiscard]]
   static constexpr Cuboid fromCenterAndSize(const Vec3<T> &center, T width,
                                             T height, T depth) {
@@ -1940,6 +2732,9 @@ template <std::floating_point T> struct Cuboid {
     return fromCorners(center - halfSize, center + halfSize);
   }
 
+  /// Returns the cuboid centered at `center` with the given size.
+  ///
+  /// Negative components are treated as their absolute values.
   [[nodiscard]]
   static constexpr Cuboid fromCenterAndSize(const Vec3<T> &center,
                                             const Vec3<T> &size) {
@@ -1947,7 +2742,8 @@ template <std::floating_point T> struct Cuboid {
     return fromCorners(center - halfSize, center + halfSize);
   }
 
-  // The bottom face (min.z) counterclockwise from min, then the top face.
+  /// Returns the eight corners: the bottom face (at `min.z`) counterclockwise
+  /// from `min`, then the top face (at `max.z`) in the same order.
   [[nodiscard]]
   constexpr std::array<Vec3<T>, 8> corners() const {
     return {min,
@@ -1960,6 +2756,8 @@ template <std::floating_point T> struct Cuboid {
             Vec3<T>(min.x, max.y, max.z)};
   }
 
+  /// Returns the twelve edges: the four of the bottom face, the four of the top
+  /// face, then the four joining them.
   [[nodiscard]]
   constexpr std::array<LineSegment3<T>, 12> edges() const {
     const auto c = corners();
@@ -1971,6 +2769,8 @@ template <std::floating_point T> struct Cuboid {
             LineSegment3<T>{c[2], c[6]}, LineSegment3<T>{c[3], c[7]}};
   }
 
+  /// Returns the six faces as rectangles: the three through `min`, then the
+  /// three through `max`.
   [[nodiscard]]
   constexpr std::array<Rectangle3<T>, 6> faces() const {
     const Vec3<T> dx(max.x - min.x, 0, 0), dy(0, max.y - min.y, 0),
@@ -1980,102 +2780,186 @@ template <std::floating_point T> struct Cuboid {
             Rectangle3<T>{max, -dx, -dz}, Rectangle3<T>{max, -dy, -dz}};
   }
 
+  /// Returns the center of the cuboid.
   [[nodiscard]]
   constexpr Vec3<T> center() const {
     return (min + max) / 2;
   }
 
-  // Scales about point, like scaling every point of the cuboid.
+  /// Returns the cuboid flattened along z: its z extent collapses onto `min.z`,
+  /// while its x and y extents are kept.
+  [[nodiscard]]
+  constexpr Cuboid flattenedToXY() const {
+    return fromMinAndSize(min, max.x - min.x, max.y - min.y, 0);
+  }
+
+  /// Same as `flattenedToXY()`, but modifies this cuboid.
+  /// @return A reference to this cuboid.
+  constexpr Cuboid &flattenToXY() { return *this = flattenedToXY(); }
+
+  /// Returns the cuboid flattened along y: its y extent collapses onto `min.y`,
+  /// while its x and z extents are kept.
+  [[nodiscard]]
+  constexpr Cuboid flattenedToXZ() const {
+    return fromMinAndSize(min, max.x - min.x, 0, max.z - min.z);
+  }
+
+  /// Same as `flattenedToXZ()`, but modifies this cuboid.
+  /// @return A reference to this cuboid.
+  constexpr Cuboid &flattenToXZ() { return *this = flattenedToXZ(); }
+
+  /// Returns the cuboid flattened along x: its x extent collapses onto `min.x`,
+  /// while its y and z extents are kept.
+  [[nodiscard]]
+  constexpr Cuboid flattenedToYZ() const {
+    return fromMinAndSize(min, 0, max.y - min.y, max.z - min.z);
+  }
+
+  /// Same as `flattenedToYZ()`, but modifies this cuboid.
+  /// @return A reference to this cuboid.
+  constexpr Cuboid &flattenToYZ() { return *this = flattenedToYZ(); }
+
+  /// Returns the cuboid scaled by `scalar` about `point`, as if every point `p`
+  /// of it moved to `point + (p - point) * scalar`.
+  ///
+  /// A negative `scalar` also mirrors it through `point`.
   [[nodiscard]]
   constexpr Cuboid scaledFromPointBy(const Vec3<T> &point, T scalar) const {
     return fromCorners(point + (min - point) * scalar,
                        point + (max - point) * scalar);
   }
 
+  /// Same as `scaledFromPointBy()`, but modifies this cuboid.
+  /// @return A reference to this cuboid.
   constexpr Cuboid &scaleFromPointBy(const Vec3<T> &point, T scalar) {
     return *this = scaledFromPointBy(point, scalar);
   }
 
+  /// Returns the cuboid scaled by `scalar` about its center, which stays in
+  /// place.
+  ///
+  /// Same as `scaledFromPointBy()` with that point.
   [[nodiscard]]
   constexpr Cuboid scaledFromCenterBy(T scalar) const {
     return scaledFromPointBy(center(), scalar);
   }
 
+  /// Same as `scaledFromCenterBy()`, but modifies this cuboid.
+  /// @return A reference to this cuboid.
   constexpr Cuboid &scaleFromCenterBy(T scalar) {
     return *this = scaledFromCenterBy(scalar);
   }
 
+  /// Returns the cuboid scaled by `scalar` about its `min` corner, which stays
+  /// in place.
+  ///
+  /// Same as `scaledFromPointBy()` with that point.
   [[nodiscard]]
   constexpr Cuboid scaledFromMinBy(T scalar) const {
     return scaledFromPointBy(min, scalar);
   }
 
+  /// Same as `scaledFromMinBy()`, but modifies this cuboid.
+  /// @return A reference to this cuboid.
   constexpr Cuboid &scaleFromMinBy(T scalar) {
     return *this = scaledFromMinBy(scalar);
   }
 
+  /// Returns the cuboid scaled by `scalar` about its `max` corner, which stays
+  /// in place.
+  ///
+  /// Same as `scaledFromPointBy()` with that point.
   [[nodiscard]]
   constexpr Cuboid scaledFromMaxBy(T scalar) const {
     return scaledFromPointBy(max, scalar);
   }
 
+  /// Same as `scaledFromMaxBy()`, but modifies this cuboid.
+  /// @return A reference to this cuboid.
   constexpr Cuboid &scaleFromMaxBy(T scalar) {
     return *this = scaledFromMaxBy(scalar);
   }
 
-  // Scales about the origin, like scaling every point of the cuboid.
+  /// Returns the cuboid scaled by `scalar` about the origin, as if every point
+  /// of it were multiplied by `scalar`.
   [[nodiscard]]
   constexpr Cuboid scaledBy(T scalar) const {
     return fromCorners(min * scalar, max * scalar);
   }
 
+  /// Same as `scaledBy()`, but modifies this cuboid.
+  /// @return A reference to this cuboid.
   constexpr Cuboid &scaleBy(T scalar) { return *this = scaledBy(scalar); }
 
-  // Resizes the cuboid by scaling (using a 3d vector) its size about its
-  // center, keeping the center
+  /// Returns the cuboid with its width grown by `delta.x`, its height by
+  /// `delta.y` and its depth by `delta.z`, keeping its center.
+  ///
+  /// A negative delta shrinks it.
   [[nodiscard]]
-  constexpr Cuboid resizedBy(const Vec3<T> &size) const {
-    return fromCenterAndSize(center(), size);
+  constexpr Cuboid resizedBy(const Vec3<T> &delta) const {
+    return fromCenterAndSize(center(), max - min + delta);
   }
 
-  constexpr Cuboid &resizeBy(const Vec3<T> &size) {
-    return *this = resizedBy(size);
+  /// Same as `resizedBy()`, but modifies this cuboid.
+  /// @return A reference to this cuboid.
+  constexpr Cuboid &resizeBy(const Vec3<T> &delta) {
+    return *this = resizedBy(delta);
   }
 
+  /// Returns the cuboid with its width, height and depth all grown by `size`,
+  /// keeping its center.
+  ///
+  /// For example, a 10x10x10 cuboid resized by 2 becomes 12x12x12. A negative
+  /// `size` shrinks it.
   [[nodiscard]]
   constexpr Cuboid resizedBy(T size) const {
     return resizedBy(Vec3<T>(size, size, size));
   }
 
+  /// Same as `resizedBy()`, but modifies this cuboid.
+  /// @return A reference to this cuboid.
   constexpr Cuboid &resizeBy(T size) {
     return resizeBy(Vec3<T>(size, size, size));
   }
 
+  /// Returns the cuboid scaled by `scalar` about the origin; see `scaledBy()`.
   [[nodiscard]]
   constexpr Cuboid operator*(T scalar) const {
     return scaledBy(scalar);
   }
 
+  /// Returns the cuboid scaled by `scalar` about the origin; see `scaledBy()`.
   friend constexpr Cuboid operator*(T scalar, const Cuboid &cuboid) {
     return cuboid.scaledBy(scalar);
   }
 
+  /// Same as `scaledBy()`, but modifies this cuboid.
+  /// @return A reference to this cuboid.
   constexpr Cuboid &operator*=(T scalar) { return scaleBy(scalar); }
 
+  /// Returns the cuboid divided by `scalar` about the origin: the same as
+  /// scaling it by `1 / scalar`.
   [[nodiscard]]
   constexpr Cuboid dividedBy(T scalar) const {
     return fromCorners(min / scalar, max / scalar);
   }
 
+  /// Same as `dividedBy()`, but modifies this cuboid.
+  /// @return A reference to this cuboid.
   constexpr Cuboid &divideBy(T scalar) { return *this = dividedBy(scalar); }
 
+  /// Returns the cuboid divided by `scalar`; see `dividedBy()`.
   [[nodiscard]]
   constexpr Cuboid operator/(T scalar) const {
     return dividedBy(scalar);
   }
 
+  /// Same as `dividedBy()`, but modifies this cuboid.
+  /// @return A reference to this cuboid.
   constexpr Cuboid &operator/=(T scalar) { return divideBy(scalar); }
 
+  /// Returns the point of the cuboid closest to `point`: `point` itself when it
+  /// is inside, otherwise the nearest point on the boundary.
   [[nodiscard]]
   constexpr Vec3<T> closestPointTo(const Vec3<T> &point) const {
     return {std::clamp(point.x, min.x, max.x),
@@ -2083,12 +2967,14 @@ template <std::floating_point T> struct Cuboid {
             std::clamp(point.z, min.z, max.z)};
   }
 
+  /// Returns whether `point` lies inside the cuboid or on its surface.
   [[nodiscard]]
   constexpr bool containsPoint(const Vec3<T> &point) const {
     return point.x >= min.x && point.x <= max.x && point.y >= min.y &&
            point.y <= max.y && point.z >= min.z && point.z <= max.z;
   }
 
+  /// Writes the cuboid as `Cuboid(min: Vec3(x, y, z), max: Vec3(x, y, z))`.
   friend std::ostream &operator<<(std::ostream &os, const Cuboid &c) {
     return os << "Cuboid(min: " << c.min << ", max: " << c.max << ")";
   }
@@ -2096,6 +2982,7 @@ template <std::floating_point T> struct Cuboid {
 
 // intersects(a, b) is defined for every pair of shapes, in both orders.
 
+/// Returns whether the two circles overlap or touch.
 template <std::floating_point T>
 [[nodiscard]] constexpr bool intersects(const Circle<T> &a,
                                         const Circle<T> &b) {
@@ -2103,6 +2990,7 @@ template <std::floating_point T>
   return a.center.distanceSquaredTo(b.center) <= radii * radii;
 }
 
+/// Returns whether the two rectangles overlap or touch.
 template <std::floating_point T>
 [[nodiscard]] constexpr bool intersects(const Rectangle<T> &a,
                                         const Rectangle<T> &b) {
@@ -2110,24 +2998,30 @@ template <std::floating_point T>
          a.max.y >= b.min.y;
 }
 
+/// Returns whether the two segments overlap or touch.
+/// @param epsilon How close they must come to count as touching.
 template <std::floating_point T>
 [[nodiscard]] bool intersects(const LineSegment<T> &a, const LineSegment<T> &b,
                               T epsilon = defaultEpsilon<T>) {
   return a.distanceTo(b) <= epsilon;
 }
 
+/// Returns whether the rectangle and the circle overlap or touch.
 template <std::floating_point T>
 [[nodiscard]] constexpr bool intersects(const Rectangle<T> &rect,
                                         const Circle<T> &circle) {
   return circle.containsPoint(rect.closestPointTo(circle.center));
 }
 
+/// Returns whether the segment and the circle overlap or touch.
 template <std::floating_point T>
 [[nodiscard]] bool intersects(const LineSegment<T> &segment,
                               const Circle<T> &circle) {
   return circle.containsPoint(segment.closestPointTo(circle.center));
 }
 
+/// Returns whether the segment and the rectangle overlap or touch.
+/// @param epsilon How close they must come to count as touching.
 template <std::floating_point T>
 [[nodiscard]] bool intersects(const LineSegment<T> &segment,
                               const Rectangle<T> &rect,
@@ -2140,6 +3034,7 @@ template <std::floating_point T>
   return false;
 }
 
+/// Returns whether the triangle and the circle overlap or touch.
 template <std::floating_point T>
 [[nodiscard]] bool intersects(const Triangle<T> &triangle,
                               const Circle<T> &circle) {
@@ -2149,6 +3044,8 @@ template <std::floating_point T>
   return triangle.containsPoint(circle.center);
 }
 
+/// Returns whether the triangle and the segment overlap or touch.
+/// @param epsilon How close they must come to count as touching.
 template <std::floating_point T>
 [[nodiscard]] bool intersects(const Triangle<T> &triangle,
                               const LineSegment<T> &segment,
@@ -2159,6 +3056,8 @@ template <std::floating_point T>
   return triangle.containsPoint(segment.start, epsilon);
 }
 
+/// Returns whether the triangle and the rectangle overlap or touch.
+/// @param epsilon How close they must come to count as touching.
 template <std::floating_point T>
 [[nodiscard]] bool intersects(const Triangle<T> &triangle,
                               const Rectangle<T> &rect,
@@ -2169,6 +3068,8 @@ template <std::floating_point T>
   return triangle.containsPoint(rect.min, epsilon);
 }
 
+/// Returns whether the two triangles overlap or touch.
+/// @param epsilon How close they must come to count as touching.
 template <std::floating_point T>
 [[nodiscard]] bool intersects(const Triangle<T> &a, const Triangle<T> &b,
                               T epsilon = defaultEpsilon<T>) {
@@ -2178,18 +3079,22 @@ template <std::floating_point T>
   return a.containsPoint(b.a, epsilon);
 }
 
+/// Returns whether the circle and the rectangle overlap or touch.
 template <std::floating_point T>
 [[nodiscard]] constexpr bool intersects(const Circle<T> &circle,
                                         const Rectangle<T> &rect) {
   return intersects(rect, circle);
 }
 
+/// Returns whether the circle and the segment overlap or touch.
 template <std::floating_point T>
 [[nodiscard]] bool intersects(const Circle<T> &circle,
                               const LineSegment<T> &segment) {
   return intersects(segment, circle);
 }
 
+/// Returns whether the rectangle and the segment overlap or touch.
+/// @param epsilon How close they must come to count as touching.
 template <std::floating_point T>
 [[nodiscard]] bool intersects(const Rectangle<T> &rect,
                               const LineSegment<T> &segment,
@@ -2197,12 +3102,15 @@ template <std::floating_point T>
   return intersects(segment, rect, epsilon);
 }
 
+/// Returns whether the circle and the triangle overlap or touch.
 template <std::floating_point T>
 [[nodiscard]] bool intersects(const Circle<T> &circle,
                               const Triangle<T> &triangle) {
   return intersects(triangle, circle);
 }
 
+/// Returns whether the segment and the triangle overlap or touch.
+/// @param epsilon How close they must come to count as touching.
 template <std::floating_point T>
 [[nodiscard]] bool intersects(const LineSegment<T> &segment,
                               const Triangle<T> &triangle,
@@ -2210,6 +3118,8 @@ template <std::floating_point T>
   return intersects(triangle, segment, epsilon);
 }
 
+/// Returns whether the rectangle and the triangle overlap or touch.
+/// @param epsilon How close they must come to count as touching.
 template <std::floating_point T>
 [[nodiscard]] bool intersects(const Rectangle<T> &rect,
                               const Triangle<T> &triangle,
@@ -2217,6 +3127,7 @@ template <std::floating_point T>
   return intersects(triangle, rect, epsilon);
 }
 
+/// Returns whether the two spheres overlap or touch.
 template <std::floating_point T>
 [[nodiscard]] constexpr bool intersects(const Sphere<T> &a,
                                         const Sphere<T> &b) {
@@ -2224,6 +3135,7 @@ template <std::floating_point T>
   return a.center.distanceSquaredTo(b.center) <= radii * radii;
 }
 
+/// Returns whether the two cuboids overlap or touch.
 template <std::floating_point T>
 [[nodiscard]] constexpr bool intersects(const Cuboid<T> &a,
                                         const Cuboid<T> &b) {
@@ -2231,6 +3143,8 @@ template <std::floating_point T>
          a.max.y >= b.min.y && a.min.z <= b.max.z && a.max.z >= b.min.z;
 }
 
+/// Returns whether the two segments overlap or touch.
+/// @param epsilon How close they must come to count as touching.
 template <std::floating_point T>
 [[nodiscard]] bool intersects(const LineSegment3<T> &a,
                               const LineSegment3<T> &b,
@@ -2238,24 +3152,28 @@ template <std::floating_point T>
   return a.distanceTo(b) <= epsilon;
 }
 
+/// Returns whether the cuboid and the sphere overlap or touch.
 template <std::floating_point T>
 [[nodiscard]] constexpr bool intersects(const Cuboid<T> &cuboid,
                                         const Sphere<T> &sphere) {
   return sphere.containsPoint(cuboid.closestPointTo(sphere.center));
 }
 
+/// Returns whether the segment and the sphere overlap or touch.
 template <std::floating_point T>
 [[nodiscard]] constexpr bool intersects(const LineSegment3<T> &segment,
                                         const Sphere<T> &sphere) {
   return sphere.containsPoint(segment.closestPointTo(sphere.center));
 }
 
-// Clips the segment against each pair of faces in turn, with the cuboid grown
-// by epsilon.
+/// Returns whether the segment and the cuboid overlap or touch.
+/// @param epsilon How close they must come to count as touching.
 template <std::floating_point T>
 [[nodiscard]] constexpr bool intersects(const LineSegment3<T> &segment,
                                         const Cuboid<T> &cuboid,
                                         T epsilon = defaultEpsilon<T>) {
+  // Clips the segment against each pair of faces in turn, with the cuboid grown
+  // by epsilon.
   const auto dir = segment.direction();
   T enter = 0, exit = 1;
   for (std::size_t axis = 0; axis < 3; axis++) {
@@ -2278,18 +3196,21 @@ template <std::floating_point T>
   return true;
 }
 
+/// Returns whether the triangle and the sphere overlap or touch.
 template <std::floating_point T>
 [[nodiscard]] bool intersects(const Triangle3<T> &triangle,
                               const Sphere<T> &sphere) {
   return sphere.containsPoint(triangle.closestPointTo(sphere.center));
 }
 
-// Either the segment crosses the triangle's plane inside it, or the closest
-// points involve an endpoint of the segment or an edge of the triangle.
+/// Returns whether the triangle and the segment overlap or touch.
+/// @param epsilon How close they must come to count as touching.
 template <std::floating_point T>
 [[nodiscard]] bool intersects(const Triangle3<T> &triangle,
                               const LineSegment3<T> &segment,
                               T epsilon = defaultEpsilon<T>) {
+  // Either the segment crosses the triangle's plane inside it, or the closest
+  // points involve an endpoint of the segment or an edge of the triangle.
   const auto n =
       (triangle.b - triangle.a).crossProductWith(triangle.c - triangle.a);
   const auto startSide = n.dotProductWith(segment.start - triangle.a);
@@ -2310,12 +3231,14 @@ template <std::floating_point T>
   return false;
 }
 
-// Where they meet, either an edge of the triangle reaches the cuboid or an
-// edge of the cuboid reaches the triangle.
+/// Returns whether the triangle and the cuboid overlap or touch.
+/// @param epsilon How close they must come to count as touching.
 template <std::floating_point T>
 [[nodiscard]] bool intersects(const Triangle3<T> &triangle,
                               const Cuboid<T> &cuboid,
                               T epsilon = defaultEpsilon<T>) {
+  // Where they meet, either an edge of the triangle reaches the cuboid or an
+  // edge of the cuboid reaches the triangle.
   for (const auto &edge : triangle.edges())
     if (intersects(edge, cuboid, epsilon))
       return true;
@@ -2325,10 +3248,12 @@ template <std::floating_point T>
   return false;
 }
 
-// Where they meet, an edge of one triangle reaches the other.
+/// Returns whether the two triangles overlap or touch.
+/// @param epsilon How close they must come to count as touching.
 template <std::floating_point T>
 [[nodiscard]] bool intersects(const Triangle3<T> &a, const Triangle3<T> &b,
                               T epsilon = defaultEpsilon<T>) {
+  // Where they meet, an edge of one triangle reaches the other.
   for (const auto &edge : a.edges())
     if (intersects(b, edge, epsilon))
       return true;
@@ -2338,18 +3263,22 @@ template <std::floating_point T>
   return false;
 }
 
+/// Returns whether the sphere and the cuboid overlap or touch.
 template <std::floating_point T>
 [[nodiscard]] constexpr bool intersects(const Sphere<T> &sphere,
                                         const Cuboid<T> &cuboid) {
   return intersects(cuboid, sphere);
 }
 
+/// Returns whether the sphere and the segment overlap or touch.
 template <std::floating_point T>
 [[nodiscard]] constexpr bool intersects(const Sphere<T> &sphere,
                                         const LineSegment3<T> &segment) {
   return intersects(segment, sphere);
 }
 
+/// Returns whether the cuboid and the segment overlap or touch.
+/// @param epsilon How close they must come to count as touching.
 template <std::floating_point T>
 [[nodiscard]] constexpr bool intersects(const Cuboid<T> &cuboid,
                                         const LineSegment3<T> &segment,
@@ -2357,12 +3286,15 @@ template <std::floating_point T>
   return intersects(segment, cuboid, epsilon);
 }
 
+/// Returns whether the sphere and the triangle overlap or touch.
 template <std::floating_point T>
 [[nodiscard]] bool intersects(const Sphere<T> &sphere,
                               const Triangle3<T> &triangle) {
   return intersects(triangle, sphere);
 }
 
+/// Returns whether the segment and the triangle overlap or touch.
+/// @param epsilon How close they must come to count as touching.
 template <std::floating_point T>
 [[nodiscard]] bool intersects(const LineSegment3<T> &segment,
                               const Triangle3<T> &triangle,
@@ -2370,6 +3302,8 @@ template <std::floating_point T>
   return intersects(triangle, segment, epsilon);
 }
 
+/// Returns whether the cuboid and the triangle overlap or touch.
+/// @param epsilon How close they must come to count as touching.
 template <std::floating_point T>
 [[nodiscard]] bool intersects(const Cuboid<T> &cuboid,
                               const Triangle3<T> &triangle,
@@ -2411,12 +3345,15 @@ sliceByPlane(const Triangle3<T> &triangle, const Vec3<T> &planePoint,
 }
 } // namespace detail
 
+/// Returns whether the disc and the sphere overlap or touch.
 template <std::floating_point T>
 [[nodiscard]] bool intersects(const Circle3<T> &circle,
                               const Sphere<T> &sphere) {
   return sphere.containsPoint(circle.closestPointTo(sphere.center));
 }
 
+/// Returns whether the segment and the disc overlap or touch.
+/// @param epsilon How close they must come to count as touching.
 template <std::floating_point T>
 [[nodiscard]] bool intersects(const LineSegment3<T> &segment,
                               const Circle3<T> &circle,
@@ -2439,6 +3376,8 @@ template <std::floating_point T>
   return reaches(segment.start + segment.direction() * t);
 }
 
+/// Returns whether the triangle and the disc overlap or touch.
+/// @param epsilon How close they must come to count as touching.
 template <std::floating_point T>
 [[nodiscard]] bool intersects(const Triangle3<T> &triangle,
                               const Circle3<T> &circle,
@@ -2454,11 +3393,13 @@ template <std::floating_point T>
   return slice && intersects(*slice, circle, epsilon);
 }
 
-// When the circles are not coplanar, they can only meet on the line where
-// their planes cross, so b's chord along that line must reach a.
+/// Returns whether the two discs overlap or touch.
+/// @param epsilon How close they must come to count as touching.
 template <std::floating_point T>
 [[nodiscard]] bool intersects(const Circle3<T> &a, const Circle3<T> &b,
                               T epsilon = defaultEpsilon<T>) {
+  // When the circles are not coplanar, they can only meet on the line where
+  // their planes cross, so b's chord along that line must reach a.
   const auto na = a.normal.normalized();
   const auto nb = b.normal.normalized();
   const auto line = na.crossProductWith(nb);
@@ -2484,10 +3425,12 @@ template <std::floating_point T>
                     a, epsilon);
 }
 
-// The circle either has its center inside the cuboid or meets a face.
+/// Returns whether the cuboid and the disc overlap or touch.
+/// @param epsilon How close they must come to count as touching.
 template <std::floating_point T>
 [[nodiscard]] bool intersects(const Cuboid<T> &cuboid, const Circle3<T> &circle,
                               T epsilon = defaultEpsilon<T>) {
+  // The circle either has its center inside the cuboid or meets a face.
   if (cuboid.containsPoint(circle.center))
     return true;
   for (const auto &face : cuboid.faces())
@@ -2497,6 +3440,7 @@ template <std::floating_point T>
   return false;
 }
 
+/// Returns whether the rectangle and the sphere overlap or touch.
 template <std::floating_point T>
 [[nodiscard]] bool intersects(const Rectangle3<T> &rect,
                               const Sphere<T> &sphere) {
@@ -2505,6 +3449,8 @@ template <std::floating_point T>
 
 // The remaining rectangle tests split it into its two triangles.
 
+/// Returns whether the rectangle and the segment overlap or touch.
+/// @param epsilon How close they must come to count as touching.
 template <std::floating_point T>
 [[nodiscard]] bool intersects(const Rectangle3<T> &rect,
                               const LineSegment3<T> &segment,
@@ -2515,6 +3461,8 @@ template <std::floating_point T>
   return false;
 }
 
+/// Returns whether the rectangle and the triangle overlap or touch.
+/// @param epsilon How close they must come to count as touching.
 template <std::floating_point T>
 [[nodiscard]] bool intersects(const Rectangle3<T> &rect,
                               const Triangle3<T> &triangle,
@@ -2525,6 +3473,8 @@ template <std::floating_point T>
   return false;
 }
 
+/// Returns whether the two rectangles overlap or touch.
+/// @param epsilon How close they must come to count as touching.
 template <std::floating_point T>
 [[nodiscard]] bool intersects(const Rectangle3<T> &a, const Rectangle3<T> &b,
                               T epsilon = defaultEpsilon<T>) {
@@ -2534,6 +3484,8 @@ template <std::floating_point T>
   return false;
 }
 
+/// Returns whether the rectangle and the cuboid overlap or touch.
+/// @param epsilon How close they must come to count as touching.
 template <std::floating_point T>
 [[nodiscard]] bool intersects(const Rectangle3<T> &rect,
                               const Cuboid<T> &cuboid,
@@ -2544,6 +3496,8 @@ template <std::floating_point T>
   return false;
 }
 
+/// Returns whether the rectangle and the disc overlap or touch.
+/// @param epsilon How close they must come to count as touching.
 template <std::floating_point T>
 [[nodiscard]] bool intersects(const Rectangle3<T> &rect,
                               const Circle3<T> &circle,
@@ -2554,12 +3508,15 @@ template <std::floating_point T>
   return false;
 }
 
+/// Returns whether the sphere and the disc overlap or touch.
 template <std::floating_point T>
 [[nodiscard]] bool intersects(const Sphere<T> &sphere,
                               const Circle3<T> &circle) {
   return intersects(circle, sphere);
 }
 
+/// Returns whether the disc and the segment overlap or touch.
+/// @param epsilon How close they must come to count as touching.
 template <std::floating_point T>
 [[nodiscard]] bool intersects(const Circle3<T> &circle,
                               const LineSegment3<T> &segment,
@@ -2567,6 +3524,8 @@ template <std::floating_point T>
   return intersects(segment, circle, epsilon);
 }
 
+/// Returns whether the disc and the triangle overlap or touch.
+/// @param epsilon How close they must come to count as touching.
 template <std::floating_point T>
 [[nodiscard]] bool intersects(const Circle3<T> &circle,
                               const Triangle3<T> &triangle,
@@ -2574,18 +3533,23 @@ template <std::floating_point T>
   return intersects(triangle, circle, epsilon);
 }
 
+/// Returns whether the disc and the cuboid overlap or touch.
+/// @param epsilon How close they must come to count as touching.
 template <std::floating_point T>
 [[nodiscard]] bool intersects(const Circle3<T> &circle, const Cuboid<T> &cuboid,
                               T epsilon = defaultEpsilon<T>) {
   return intersects(cuboid, circle, epsilon);
 }
 
+/// Returns whether the sphere and the rectangle overlap or touch.
 template <std::floating_point T>
 [[nodiscard]] bool intersects(const Sphere<T> &sphere,
                               const Rectangle3<T> &rect) {
   return intersects(rect, sphere);
 }
 
+/// Returns whether the segment and the rectangle overlap or touch.
+/// @param epsilon How close they must come to count as touching.
 template <std::floating_point T>
 [[nodiscard]] bool intersects(const LineSegment3<T> &segment,
                               const Rectangle3<T> &rect,
@@ -2593,6 +3557,8 @@ template <std::floating_point T>
   return intersects(rect, segment, epsilon);
 }
 
+/// Returns whether the triangle and the rectangle overlap or touch.
+/// @param epsilon How close they must come to count as touching.
 template <std::floating_point T>
 [[nodiscard]] bool intersects(const Triangle3<T> &triangle,
                               const Rectangle3<T> &rect,
@@ -2600,6 +3566,8 @@ template <std::floating_point T>
   return intersects(rect, triangle, epsilon);
 }
 
+/// Returns whether the cuboid and the rectangle overlap or touch.
+/// @param epsilon How close they must come to count as touching.
 template <std::floating_point T>
 [[nodiscard]] bool intersects(const Cuboid<T> &cuboid,
                               const Rectangle3<T> &rect,
@@ -2607,6 +3575,8 @@ template <std::floating_point T>
   return intersects(rect, cuboid, epsilon);
 }
 
+/// Returns whether the disc and the rectangle overlap or touch.
+/// @param epsilon How close they must come to count as touching.
 template <std::floating_point T>
 [[nodiscard]] bool intersects(const Circle3<T> &circle,
                               const Rectangle3<T> &rect,
@@ -2637,6 +3607,10 @@ using Rectangle3d = Rectangle3<double>;
 } // namespace mathlib
 
 namespace std {
+/// Formats a `Vec2` as `Vec2(x, y)`.
+///
+/// The format spec applies to each number, so `std::format("{:.2f}", x)` prints
+/// every coordinate with two decimals.
 template <floating_point T> struct formatter<mathlib::Vec2<T>> : formatter<T> {
   auto format(const mathlib::Vec2<T> &v, format_context &ctx) const {
     auto out = ctx.out();
@@ -2651,6 +3625,10 @@ template <floating_point T> struct formatter<mathlib::Vec2<T>> : formatter<T> {
   }
 };
 
+/// Formats a `Vec3` as `Vec3(x, y, z)`.
+///
+/// The format spec applies to each number, so `std::format("{:.2f}", x)` prints
+/// every coordinate with two decimals.
 template <floating_point T> struct formatter<mathlib::Vec3<T>> : formatter<T> {
   auto format(const mathlib::Vec3<T> &v, format_context &ctx) const {
     auto out = ctx.out();
@@ -2667,6 +3645,11 @@ template <floating_point T> struct formatter<mathlib::Vec3<T>> : formatter<T> {
   }
 };
 
+/// Formats a `Circle` like its `operator<<`, as
+/// `Circle(center: Vec2(x, y), radius: r)`.
+///
+/// The format spec applies to each number, so `std::format("{:.2f}", x)` prints
+/// every coordinate with two decimals.
 template <floating_point T>
 struct formatter<mathlib::Circle<T>> : formatter<mathlib::Vec2<T>> {
   auto format(const mathlib::Circle<T> &c, format_context &ctx) const {
@@ -2682,6 +3665,11 @@ struct formatter<mathlib::Circle<T>> : formatter<mathlib::Vec2<T>> {
   }
 };
 
+/// Formats a `Rectangle` like its `operator<<`, as
+/// `Rectangle(min: Vec2(x, y), max: Vec2(x, y))`.
+///
+/// The format spec applies to each number, so `std::format("{:.2f}", x)` prints
+/// every coordinate with two decimals.
 template <floating_point T>
 struct formatter<mathlib::Rectangle<T>> : formatter<mathlib::Vec2<T>> {
   auto format(const mathlib::Rectangle<T> &r, format_context &ctx) const {
@@ -2697,6 +3685,11 @@ struct formatter<mathlib::Rectangle<T>> : formatter<mathlib::Vec2<T>> {
   }
 };
 
+/// Formats a `LineSegment` like its `operator<<`, as
+/// `LineSegment(start: Vec2(...), end: Vec2(...))`.
+///
+/// The format spec applies to each number, so `std::format("{:.2f}", x)` prints
+/// every coordinate with two decimals.
 template <floating_point T>
 struct formatter<mathlib::LineSegment<T>> : formatter<mathlib::Vec2<T>> {
   auto format(const mathlib::LineSegment<T> &l, format_context &ctx) const {
@@ -2712,6 +3705,11 @@ struct formatter<mathlib::LineSegment<T>> : formatter<mathlib::Vec2<T>> {
   }
 };
 
+/// Formats a `Triangle` like its `operator<<`, as
+/// `Triangle(a: Vec2(...), b: Vec2(...), c: Vec2(...))`.
+///
+/// The format spec applies to each number, so `std::format("{:.2f}", x)` prints
+/// every coordinate with two decimals.
 template <floating_point T>
 struct formatter<mathlib::Triangle<T>> : formatter<mathlib::Vec2<T>> {
   auto format(const mathlib::Triangle<T> &t, format_context &ctx) const {
@@ -2729,6 +3727,11 @@ struct formatter<mathlib::Triangle<T>> : formatter<mathlib::Vec2<T>> {
   }
 };
 
+/// Formats a `Sphere` like its `operator<<`, as
+/// `Sphere(center: Vec3(x, y, z), radius: r)`.
+///
+/// The format spec applies to each number, so `std::format("{:.2f}", x)` prints
+/// every coordinate with two decimals.
 template <floating_point T>
 struct formatter<mathlib::Sphere<T>> : formatter<mathlib::Vec3<T>> {
   auto format(const mathlib::Sphere<T> &s, format_context &ctx) const {
@@ -2744,6 +3747,11 @@ struct formatter<mathlib::Sphere<T>> : formatter<mathlib::Vec3<T>> {
   }
 };
 
+/// Formats a `Cuboid` like its `operator<<`, as
+/// `Cuboid(min: Vec3(x, y, z), max: Vec3(x, y, z))`.
+///
+/// The format spec applies to each number, so `std::format("{:.2f}", x)` prints
+/// every coordinate with two decimals.
 template <floating_point T>
 struct formatter<mathlib::Cuboid<T>> : formatter<mathlib::Vec3<T>> {
   auto format(const mathlib::Cuboid<T> &c, format_context &ctx) const {
@@ -2759,6 +3767,11 @@ struct formatter<mathlib::Cuboid<T>> : formatter<mathlib::Vec3<T>> {
   }
 };
 
+/// Formats a `LineSegment3` like its `operator<<`, as
+/// `LineSegment3(start: Vec3(...), end: Vec3(...))`.
+///
+/// The format spec applies to each number, so `std::format("{:.2f}", x)` prints
+/// every coordinate with two decimals.
 template <floating_point T>
 struct formatter<mathlib::LineSegment3<T>> : formatter<mathlib::Vec3<T>> {
   auto format(const mathlib::LineSegment3<T> &l, format_context &ctx) const {
@@ -2774,6 +3787,11 @@ struct formatter<mathlib::LineSegment3<T>> : formatter<mathlib::Vec3<T>> {
   }
 };
 
+/// Formats a `Triangle3` like its `operator<<`, as
+/// `Triangle3(a: ..., b: ..., c: ...)`.
+///
+/// The format spec applies to each number, so `std::format("{:.2f}", x)` prints
+/// every coordinate with two decimals.
 template <floating_point T>
 struct formatter<mathlib::Triangle3<T>> : formatter<mathlib::Vec3<T>> {
   auto format(const mathlib::Triangle3<T> &t, format_context &ctx) const {
@@ -2791,6 +3809,11 @@ struct formatter<mathlib::Triangle3<T>> : formatter<mathlib::Vec3<T>> {
   }
 };
 
+/// Formats a `Circle3` like its `operator<<`, as
+/// `Circle3(center: ..., radius: ..., normal: ...)`.
+///
+/// The format spec applies to each number, so `std::format("{:.2f}", x)` prints
+/// every coordinate with two decimals.
 template <floating_point T>
 struct formatter<mathlib::Circle3<T>> : formatter<mathlib::Vec3<T>> {
   auto format(const mathlib::Circle3<T> &c, format_context &ctx) const {
@@ -2808,6 +3831,11 @@ struct formatter<mathlib::Circle3<T>> : formatter<mathlib::Vec3<T>> {
   }
 };
 
+/// Formats a `Rectangle3` like its `operator<<`, as
+/// `Rectangle3(corner: ..., u: ..., v: ...)`.
+///
+/// The format spec applies to each number, so `std::format("{:.2f}", x)` prints
+/// every coordinate with two decimals.
 template <floating_point T>
 struct formatter<mathlib::Rectangle3<T>> : formatter<mathlib::Vec3<T>> {
   auto format(const mathlib::Rectangle3<T> &r, format_context &ctx) const {
