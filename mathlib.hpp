@@ -30,6 +30,7 @@ template <std::floating_point T> struct Vec2 {
 
   constexpr Vec2() = default;
   constexpr Vec2(T x, T y) : x(x), y(y) {}
+  constexpr Vec2(const Vec2 &other) : x(other.x), y(other.y) {}
   template <std::floating_point U>
   constexpr explicit(sizeof(U) > sizeof(T)) Vec2(const Vec2<U> &other)
       : x(static_cast<T>(other.x)), y(static_cast<T>(other.y)) {}
@@ -327,6 +328,7 @@ template <std::floating_point T> struct Vec3 {
   constexpr Vec3() = default;
   constexpr Vec3(T x, T y, T z) : x(x), y(y), z(z) {}
   constexpr Vec3(const Vec2<T> &vec2, T z) : x(vec2.x), y(vec2.y), z(z) {}
+  constexpr Vec3(const Vec3 &other) : x(other.x), y(other.y), z(other.z) {}
 
   template <std::floating_point U>
   constexpr explicit(sizeof(U) > sizeof(T)) Vec3(const Vec2<U> &vec2, U z)
@@ -721,6 +723,12 @@ template <std::floating_point T> struct Circle {
   Vec2<T> center;
   T radius{};
 
+  constexpr Circle() = default;
+  constexpr Circle(const Vec2<T> &center, T radius)
+      : center(center), radius(radius) {}
+  constexpr Circle(const Circle &other)
+      : center(other.center), radius(other.radius) {}
+
   // a and b are opposite ends of a diameter.
   [[nodiscard]]
   static Circle fromDiameter(const Vec2<T> &a, const Vec2<T> &b) {
@@ -819,6 +827,12 @@ template <std::floating_point T> struct Circle {
 template <std::floating_point T> struct LineSegment {
   Vec2<T> start;
   Vec2<T> end;
+
+  constexpr LineSegment() = default;
+  constexpr LineSegment(const Vec2<T> &start, const Vec2<T> &end)
+      : start(start), end(end) {}
+  constexpr LineSegment(const LineSegment &other)
+      : start(other.start), end(other.end) {}
 
   [[nodiscard]]
   static constexpr LineSegment fromStartAndDirection(const Vec2<T> &start,
@@ -959,6 +973,12 @@ template <std::floating_point T> struct LineSegment {
 template <std::floating_point T> struct Rectangle {
   Vec2<T> min;
   Vec2<T> max;
+
+  constexpr Rectangle() = default;
+  constexpr Rectangle(const Vec2<T> &min, const Vec2<T> &max)
+      : min(min), max(max) {}
+  constexpr Rectangle(const Rectangle &other)
+      : min(other.min), max(other.max) {}
 
   // a and b are any two opposite corners.
   [[nodiscard]]
@@ -1234,6 +1254,12 @@ template <std::floating_point T> struct Sphere {
   Vec3<T> center;
   T radius{};
 
+  constexpr Sphere() = default;
+  constexpr Sphere(const Vec3<T> &center, T radius)
+      : center(center), radius(radius) {}
+  constexpr Sphere(const Sphere &other)
+      : center(other.center), radius(other.radius) {}
+
   // a and b are opposite ends of a diameter.
   [[nodiscard]]
   static Sphere fromDiameter(const Vec3<T> &a, const Vec3<T> &b) {
@@ -1315,6 +1341,12 @@ template <std::floating_point T> struct Circle3 {
   Vec3<T> center;
   T radius{};
   Vec3<T> normal = Vec3<T>::unitZ();
+
+  constexpr Circle3() = default;
+  constexpr Circle3(const Vec3<T> &center, T radius, const Vec3<T> &normal)
+      : center(center), radius(radius), normal(normal) {}
+  constexpr Circle3(const Circle3 &other)
+      : center(other.center), radius(other.radius), normal(other.normal) {}
 
   // Places circle in the plane at height z, facing +z.
   [[nodiscard]]
@@ -1409,6 +1441,12 @@ template <std::floating_point T> struct Circle3 {
 template <std::floating_point T> struct LineSegment3 {
   Vec3<T> start;
   Vec3<T> end;
+
+  constexpr LineSegment3() = default;
+  constexpr LineSegment3(const Vec3<T> &start, const Vec3<T> &end)
+      : start(start), end(end) {}
+  constexpr LineSegment3(const LineSegment3 &other)
+      : start(other.start), end(other.end) {}
 
   [[nodiscard]]
   static constexpr LineSegment3
@@ -1561,6 +1599,12 @@ template <std::floating_point T> struct LineSegment3 {
 template <std::floating_point T> struct Triangle3 {
   Vec3<T> a, b, c;
 
+  constexpr Triangle3() = default;
+  constexpr Triangle3(const Vec3<T> &a, const Vec3<T> &b, const Vec3<T> &c)
+      : a(a), b(b), c(c) {}
+  constexpr Triangle3(const Triangle3 &other)
+      : a(other.a), b(other.b), c(other.c) {}
+
   // Places triangle in the plane at height z.
   [[nodiscard]]
   static constexpr Triangle3 fromTriangle(const Triangle<T> &triangle,
@@ -1696,6 +1740,13 @@ template <std::floating_point T> struct Rectangle3 {
   Vec3<T> corner;
   Vec3<T> u;
   Vec3<T> v;
+
+  constexpr Rectangle3() = default;
+  constexpr Rectangle3(const Vec3<T> &corner, const Vec3<T> &u,
+                       const Vec3<T> &v)
+      : corner(corner), u(u), v(v) {}
+  constexpr Rectangle3(const Rectangle3 &other)
+      : corner(other.corner), u(other.u), v(other.v) {}
 
   // Places rect in the plane at height z, facing +z.
   [[nodiscard]]
@@ -1856,6 +1907,11 @@ template <std::floating_point T> struct Rectangle3 {
 template <std::floating_point T> struct Cuboid {
   Vec3<T> min;
   Vec3<T> max;
+
+  constexpr Cuboid() = default;
+  constexpr Cuboid(const Vec3<T> &min, const Vec3<T> &max)
+      : min(min), max(max) {}
+  constexpr Cuboid(const Cuboid &other) : min(other.min), max(other.max) {}
 
   // a and b are any two opposite corners.
   [[nodiscard]]
