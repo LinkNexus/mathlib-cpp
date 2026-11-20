@@ -1179,6 +1179,20 @@ template <std::floating_point T> struct Circle {
     return closestPointTo(point).distanceTo(point);
   }
 
+  /// Returns the circle moved by `offset`, keeping its size and orientation.
+  [[nodiscard]]
+  constexpr Circle translatedBy(const Vec2<T> &offset) const {
+    auto moved = *this;
+    moved.center += offset;
+    return moved;
+  }
+
+  /// Same as `translatedBy()`, but modifies this circle.
+  /// @return A reference to this circle.
+  constexpr Circle &translateBy(const Vec2<T> &offset) {
+    return *this = translatedBy(offset);
+  }
+
   /// Writes the circle as `Circle(center: Vec2(x, y), radius: r)`.
   friend std::ostream &operator<<(std::ostream &os, const Circle &c) {
     return os << "Circle(center: " << c.center << ", radius: " << c.radius
@@ -1376,6 +1390,21 @@ template <std::floating_point T> struct LineSegment {
   bool containsPoint(const Vec2<T> &point,
                      T epsilon = defaultEpsilon<T>) const {
     return distanceTo(point) <= epsilon;
+  }
+
+  /// Returns the segment moved by `offset`, keeping its size and orientation.
+  [[nodiscard]]
+  constexpr LineSegment translatedBy(const Vec2<T> &offset) const {
+    auto moved = *this;
+    moved.start += offset;
+    moved.end += offset;
+    return moved;
+  }
+
+  /// Same as `translatedBy()`, but modifies this segment.
+  /// @return A reference to this segment.
+  constexpr LineSegment &translateBy(const Vec2<T> &offset) {
+    return *this = translatedBy(offset);
   }
 
   /// Writes the segment as `LineSegment(start: Vec2(...), end: Vec2(...))`.
@@ -1727,6 +1756,21 @@ template <std::floating_point T> struct Rectangle {
            point.y <= max.y;
   }
 
+  /// Returns the rectangle moved by `offset`, keeping its size and orientation.
+  [[nodiscard]]
+  constexpr Rectangle translatedBy(const Vec2<T> &offset) const {
+    auto moved = *this;
+    moved.min += offset;
+    moved.max += offset;
+    return moved;
+  }
+
+  /// Same as `translatedBy()`, but modifies this rectangle.
+  /// @return A reference to this rectangle.
+  constexpr Rectangle &translateBy(const Vec2<T> &offset) {
+    return *this = translatedBy(offset);
+  }
+
   /// Writes the rectangle as `Rectangle(min: Vec2(x, y), max: Vec2(x, y))`.
   friend std::ostream &operator<<(std::ostream &os, const Rectangle &r) {
     return os << "Rectangle(min: " << r.min << ", max: " << r.max << ")";
@@ -1875,6 +1919,22 @@ template <std::floating_point T> struct Triangle {
     return false;
   }
 
+  /// Returns the triangle moved by `offset`, keeping its size and orientation.
+  [[nodiscard]]
+  constexpr Triangle translatedBy(const Vec2<T> &offset) const {
+    auto moved = *this;
+    moved.a += offset;
+    moved.b += offset;
+    moved.c += offset;
+    return moved;
+  }
+
+  /// Same as `translatedBy()`, but modifies this triangle.
+  /// @return A reference to this triangle.
+  constexpr Triangle &translateBy(const Vec2<T> &offset) {
+    return *this = translatedBy(offset);
+  }
+
   /// Writes the triangle as
   /// `Triangle(a: Vec2(...), b: Vec2(...), c: Vec2(...))`.
   friend std::ostream &operator<<(std::ostream &os, const Triangle &t) {
@@ -1994,6 +2054,20 @@ template <std::floating_point T> struct Sphere {
   [[nodiscard]]
   constexpr bool containsPoint(const Vec3<T> &point) const {
     return center.distanceSquaredTo(point) <= radius * radius;
+  }
+
+  /// Returns the sphere moved by `offset`, keeping its size and orientation.
+  [[nodiscard]]
+  constexpr Sphere translatedBy(const Vec3<T> &offset) const {
+    auto moved = *this;
+    moved.center += offset;
+    return moved;
+  }
+
+  /// Same as `translatedBy()`, but modifies this sphere.
+  /// @return A reference to this sphere.
+  constexpr Sphere &translateBy(const Vec3<T> &offset) {
+    return *this = translatedBy(offset);
   }
 
   /// Writes the sphere as `Sphere(center: Vec3(x, y, z), radius: r)`.
@@ -2141,6 +2215,20 @@ template <std::floating_point T> struct Circle3 {
   bool containsPoint(const Vec3<T> &point,
                      T epsilon = defaultEpsilon<T>) const {
     return distanceTo(point) <= epsilon;
+  }
+
+  /// Returns the disc moved by `offset`, keeping its size and orientation.
+  [[nodiscard]]
+  constexpr Circle3 translatedBy(const Vec3<T> &offset) const {
+    auto moved = *this;
+    moved.center += offset;
+    return moved;
+  }
+
+  /// Same as `translatedBy()`, but modifies this disc.
+  /// @return A reference to this disc.
+  constexpr Circle3 &translateBy(const Vec3<T> &offset) {
+    return *this = translatedBy(offset);
   }
 
   /// Writes the disc as `Circle3(center: ..., radius: ..., normal: ...)`.
@@ -2352,6 +2440,21 @@ template <std::floating_point T> struct LineSegment3 {
     return distanceTo(point) <= epsilon;
   }
 
+  /// Returns the segment moved by `offset`, keeping its size and orientation.
+  [[nodiscard]]
+  constexpr LineSegment3 translatedBy(const Vec3<T> &offset) const {
+    auto moved = *this;
+    moved.start += offset;
+    moved.end += offset;
+    return moved;
+  }
+
+  /// Same as `translatedBy()`, but modifies this segment.
+  /// @return A reference to this segment.
+  constexpr LineSegment3 &translateBy(const Vec3<T> &offset) {
+    return *this = translatedBy(offset);
+  }
+
   /// Writes the segment as `LineSegment3(start: Vec3(...), end: Vec3(...))`.
   friend std::ostream &operator<<(std::ostream &os, const LineSegment3 &l) {
     return os << "LineSegment3(start: " << l.start << ", end: " << l.end << ")";
@@ -2527,6 +2630,22 @@ template <std::floating_point T> struct Triangle3 {
   bool containsPoint(const Vec3<T> &point,
                      T epsilon = defaultEpsilon<T>) const {
     return distanceTo(point) <= epsilon;
+  }
+
+  /// Returns the triangle moved by `offset`, keeping its size and orientation.
+  [[nodiscard]]
+  constexpr Triangle3 translatedBy(const Vec3<T> &offset) const {
+    auto moved = *this;
+    moved.a += offset;
+    moved.b += offset;
+    moved.c += offset;
+    return moved;
+  }
+
+  /// Same as `translatedBy()`, but modifies this triangle.
+  /// @return A reference to this triangle.
+  constexpr Triangle3 &translateBy(const Vec3<T> &offset) {
+    return *this = translatedBy(offset);
   }
 
   /// Writes the triangle as `Triangle3(a: ..., b: ..., c: ...)`.
@@ -2839,6 +2958,20 @@ template <std::floating_point T> struct Rectangle3 {
   bool containsPoint(const Vec3<T> &point,
                      T epsilon = defaultEpsilon<T>) const {
     return distanceTo(point) <= epsilon;
+  }
+
+  /// Returns the rectangle moved by `offset`, keeping its size and orientation.
+  [[nodiscard]]
+  constexpr Rectangle3 translatedBy(const Vec3<T> &offset) const {
+    auto moved = *this;
+    moved.corner += offset;
+    return moved;
+  }
+
+  /// Same as `translatedBy()`, but modifies this rectangle.
+  /// @return A reference to this rectangle.
+  constexpr Rectangle3 &translateBy(const Vec3<T> &offset) {
+    return *this = translatedBy(offset);
   }
 
   /// Writes the rectangle as `Rectangle3(corner: ..., u: ..., v: ...)`.
@@ -3266,6 +3399,21 @@ template <std::floating_point T> struct Cuboid {
            point.y <= max.y && point.z >= min.z && point.z <= max.z;
   }
 
+  /// Returns the cuboid moved by `offset`, keeping its size and orientation.
+  [[nodiscard]]
+  constexpr Cuboid translatedBy(const Vec3<T> &offset) const {
+    auto moved = *this;
+    moved.min += offset;
+    moved.max += offset;
+    return moved;
+  }
+
+  /// Same as `translatedBy()`, but modifies this cuboid.
+  /// @return A reference to this cuboid.
+  constexpr Cuboid &translateBy(const Vec3<T> &offset) {
+    return *this = translatedBy(offset);
+  }
+
   /// Writes the cuboid as `Cuboid(min: Vec3(x, y, z), max: Vec3(x, y, z))`.
   friend std::ostream &operator<<(std::ostream &os, const Cuboid &c) {
     return os << "Cuboid(min: " << c.min << ", max: " << c.max << ")";
@@ -3679,6 +3827,20 @@ template <std::floating_point T> struct OrientedCuboid {
   bool containsPoint(const Vec3<T> &point,
                      T epsilon = defaultEpsilon<T>) const {
     return distanceTo(point) <= epsilon;
+  }
+
+  /// Returns the box moved by `offset`, keeping its size and orientation.
+  [[nodiscard]]
+  constexpr OrientedCuboid translatedBy(const Vec3<T> &offset) const {
+    auto moved = *this;
+    moved.corner += offset;
+    return moved;
+  }
+
+  /// Same as `translatedBy()`, but modifies this box.
+  /// @return A reference to this box.
+  constexpr OrientedCuboid &translateBy(const Vec3<T> &offset) {
+    return *this = translatedBy(offset);
   }
 
   /// Writes the box as `OrientedCuboid(corner: ..., u: ..., v: ..., w: ...)`.
@@ -4332,6 +4494,10 @@ template <std::floating_point T> struct BoxFrame {
     return {direction.dotProductWith(axes[0]),
             direction.dotProductWith(axes[1]),
             direction.dotProductWith(axes[2])};
+  }
+  Vec3<T> toWorldDirection(const Vec3<T> &direction) const {
+    return axes[0] * direction.x + axes[1] * direction.y +
+           axes[2] * direction.z;
   }
   LineSegment3<T> toLocal(const LineSegment3<T> &segment) const {
     return {toLocal(segment.start), toLocal(segment.end)};
@@ -5273,6 +5439,461 @@ template <std::floating_point T>
                             const Rectangle3<T> &inner,
                             T epsilon = defaultEpsilon<T>) {
   return detail::verticesWithin(outer, inner, epsilon);
+}
+
+namespace detail {
+// The bounds of a set of points.
+template <std::floating_point T, std::size_t N>
+constexpr Rectangle<T> boundsOf(const std::array<Vec2<T>, N> &points) {
+  Rectangle<T> result{points[0], points[0]};
+  for (const auto &point : points)
+    for (std::size_t axis = 0; axis < 2; axis++) {
+      result.min[axis] = std::min(result.min[axis], point[axis]);
+      result.max[axis] = std::max(result.max[axis], point[axis]);
+    }
+  return result;
+}
+template <std::floating_point T, std::size_t N>
+constexpr Cuboid<T> boundsOf(const std::array<Vec3<T>, N> &points) {
+  Cuboid<T> result{points[0], points[0]};
+  for (const auto &point : points)
+    for (std::size_t axis = 0; axis < 3; axis++) {
+      result.min[axis] = std::min(result.min[axis], point[axis]);
+      result.max[axis] = std::max(result.max[axis], point[axis]);
+    }
+  return result;
+}
+
+// The smallest axis-aligned rectangle or cuboid containing a shape.
+template <std::floating_point T>
+constexpr Rectangle<T> bounds(const Circle<T> &circle) {
+  const Vec2<T> reach(circle.radius, circle.radius);
+  return {circle.center - reach, circle.center + reach};
+}
+template <std::floating_point T>
+constexpr Cuboid<T> bounds(const Sphere<T> &sphere) {
+  const Vec3<T> reach(sphere.radius, sphere.radius, sphere.radius);
+  return {sphere.center - reach, sphere.center + reach};
+}
+template <std::floating_point T> Cuboid<T> bounds(const Circle3<T> &disc) {
+  const auto reach = discExtent(disc);
+  return {disc.center - reach, disc.center + reach};
+}
+template <class Shape> constexpr auto bounds(const Shape &shape) {
+  return boundsOf(vertices(shape));
+}
+
+// The bounds of a shape seen from the frame of a box.
+template <std::floating_point T>
+Cuboid<T> localBounds(const BoxFrame<T> &frame, const Sphere<T> &sphere) {
+  return bounds(Sphere<T>{frame.toLocal(sphere.center), sphere.radius});
+}
+template <std::floating_point T>
+Cuboid<T> localBounds(const BoxFrame<T> &frame, const Circle3<T> &disc) {
+  return bounds(Circle3<T>{frame.toLocal(disc.center), disc.radius,
+                           frame.toLocalDirection(disc.normal)});
+}
+template <std::floating_point T, class Shape>
+Cuboid<T> localBounds(const BoxFrame<T> &frame, const Shape &shape) {
+  auto points = vertices(shape);
+  for (auto &point : points)
+    point = frame.toLocal(point);
+  return boundsOf(points);
+}
+
+// The smallest shift moving [innerLow, innerHigh] into [low, high]. An inner
+// interval at most epsilon too long is centered instead; a longer one cannot
+// fit.
+template <std::floating_point T>
+constexpr std::optional<T> fitInterval(T low, T high, T innerLow, T innerHigh,
+                                       T epsilon) {
+  if (innerHigh - innerLow > high - low) {
+    if (innerHigh - innerLow > high - low + epsilon)
+      return std::nullopt;
+    return (low + high) / 2 - (innerLow + innerHigh) / 2;
+  }
+  if (innerLow < low)
+    return low - innerLow;
+  if (innerHigh > high)
+    return high - innerHigh;
+  return T{0};
+}
+
+// The smallest shift moving the axis-aligned `inner` into `outer`, found axis
+// by axis since the axes are independent.
+template <class Box, std::floating_point T>
+constexpr std::optional<decltype(Box::min)>
+fitBox(const Box &outer, const Box &inner, T epsilon) {
+  constexpr std::size_t dimensions =
+      std::same_as<decltype(Box::min), Vec2<T>> ? 2 : 3;
+  decltype(Box::min) shift;
+  for (std::size_t axis = 0; axis < dimensions; axis++) {
+    const auto along = fitInterval(outer.min[axis], outer.max[axis],
+                                   inner.min[axis], inner.max[axis], epsilon);
+    if (!along)
+      return std::nullopt;
+    shift[axis] = *along;
+  }
+  return shift;
+}
+
+// The smallest shift moving a circle or sphere into a larger one: straight
+// towards its center, until it touches the boundary from inside.
+template <class Point, std::floating_point T>
+std::optional<Point> fitRound(const Point &center, T radius,
+                              const Point &innerCenter, T innerRadius,
+                              T epsilon) {
+  if (innerRadius > radius + epsilon)
+    return std::nullopt;
+  const auto offset = innerCenter - center;
+  const auto distance = offset.length();
+  const auto allowed = std::max(T{0}, radius - innerRadius);
+  if (distance <= allowed)
+    return Point();
+  return offset * ((allowed - distance) / distance);
+}
+} // namespace detail
+
+// correction(outer, inner) is defined where the smallest move has a simple
+// exact answer: any shape inside a rectangle, cuboid or oriented box of the
+// same dimension, a circle inside a circle and a sphere inside a sphere.
+
+/// Returns the smallest move that puts the circle `inner` entirely within the
+/// rectangle `outer`: the zero vector when it already fits, and no value when
+/// it is too big to fit however it is moved.
+///
+/// Apply it with `inner.translateBy()`.
+/// @param epsilon How much too big `inner` may be and still count as fitting;
+/// it is then centered on `outer`.
+template <std::floating_point T>
+[[nodiscard]] constexpr std::optional<Vec2<T>>
+correction(const Rectangle<T> &outer, const Circle<T> &inner,
+           T epsilon = defaultEpsilon<T>) {
+  return detail::fitBox(outer, detail::bounds(inner), epsilon);
+}
+
+/// Returns the smallest move that puts the rectangle `inner` entirely within
+/// the rectangle `outer`: the zero vector when it already fits, and no value
+/// when it is too big to fit however it is moved.
+///
+/// Apply it with `inner.translateBy()`.
+/// @param epsilon How much too big `inner` may be and still count as fitting;
+/// it is then centered on `outer`.
+template <std::floating_point T>
+[[nodiscard]] constexpr std::optional<Vec2<T>>
+correction(const Rectangle<T> &outer, const Rectangle<T> &inner,
+           T epsilon = defaultEpsilon<T>) {
+  return detail::fitBox(outer, detail::bounds(inner), epsilon);
+}
+
+/// Returns the smallest move that puts the segment `inner` entirely within the
+/// rectangle `outer`: the zero vector when it already fits, and no value when
+/// it is too big to fit however it is moved.
+///
+/// Apply it with `inner.translateBy()`.
+/// @param epsilon How much too big `inner` may be and still count as fitting;
+/// it is then centered on `outer`.
+template <std::floating_point T>
+[[nodiscard]] constexpr std::optional<Vec2<T>>
+correction(const Rectangle<T> &outer, const LineSegment<T> &inner,
+           T epsilon = defaultEpsilon<T>) {
+  return detail::fitBox(outer, detail::bounds(inner), epsilon);
+}
+
+/// Returns the smallest move that puts the triangle `inner` entirely within the
+/// rectangle `outer`: the zero vector when it already fits, and no value when
+/// it is too big to fit however it is moved.
+///
+/// Apply it with `inner.translateBy()`.
+/// @param epsilon How much too big `inner` may be and still count as fitting;
+/// it is then centered on `outer`.
+template <std::floating_point T>
+[[nodiscard]] constexpr std::optional<Vec2<T>>
+correction(const Rectangle<T> &outer, const Triangle<T> &inner,
+           T epsilon = defaultEpsilon<T>) {
+  return detail::fitBox(outer, detail::bounds(inner), epsilon);
+}
+
+/// Returns the smallest move that puts the circle `inner` entirely within the
+/// circle `outer`: the zero vector when it already fits, and no value when
+/// it is too big to fit however it is moved.
+///
+/// Apply it with `inner.translateBy()`.
+/// @param epsilon How much too big `inner` may be and still count as fitting;
+/// it is then centered on `outer`.
+template <std::floating_point T>
+[[nodiscard]] std::optional<Vec2<T>> correction(const Circle<T> &outer,
+                                                const Circle<T> &inner,
+                                                T epsilon = defaultEpsilon<T>) {
+  return detail::fitRound(outer.center, outer.radius, inner.center,
+                          inner.radius, epsilon);
+}
+
+/// Returns the smallest move that puts the sphere `inner` entirely within the
+/// cuboid `outer`: the zero vector when it already fits, and no value when
+/// it is too big to fit however it is moved.
+///
+/// Apply it with `inner.translateBy()`.
+/// @param epsilon How much too big `inner` may be and still count as fitting;
+/// it is then centered on `outer`.
+template <std::floating_point T>
+[[nodiscard]] constexpr std::optional<Vec3<T>>
+correction(const Cuboid<T> &outer, const Sphere<T> &inner,
+           T epsilon = defaultEpsilon<T>) {
+  return detail::fitBox(outer, detail::bounds(inner), epsilon);
+}
+
+/// Returns the smallest move that puts the cuboid `inner` entirely within the
+/// cuboid `outer`: the zero vector when it already fits, and no value when
+/// it is too big to fit however it is moved.
+///
+/// Apply it with `inner.translateBy()`.
+/// @param epsilon How much too big `inner` may be and still count as fitting;
+/// it is then centered on `outer`.
+template <std::floating_point T>
+[[nodiscard]] constexpr std::optional<Vec3<T>>
+correction(const Cuboid<T> &outer, const Cuboid<T> &inner,
+           T epsilon = defaultEpsilon<T>) {
+  return detail::fitBox(outer, detail::bounds(inner), epsilon);
+}
+
+/// Returns the smallest move that puts the box `inner` entirely within the
+/// cuboid `outer`: the zero vector when it already fits, and no value when
+/// it is too big to fit however it is moved.
+///
+/// Apply it with `inner.translateBy()`.
+/// @param epsilon How much too big `inner` may be and still count as fitting;
+/// it is then centered on `outer`.
+template <std::floating_point T>
+[[nodiscard]] constexpr std::optional<Vec3<T>>
+correction(const Cuboid<T> &outer, const OrientedCuboid<T> &inner,
+           T epsilon = defaultEpsilon<T>) {
+  return detail::fitBox(outer, detail::bounds(inner), epsilon);
+}
+
+/// Returns the smallest move that puts the segment `inner` entirely within the
+/// cuboid `outer`: the zero vector when it already fits, and no value when
+/// it is too big to fit however it is moved.
+///
+/// Apply it with `inner.translateBy()`.
+/// @param epsilon How much too big `inner` may be and still count as fitting;
+/// it is then centered on `outer`.
+template <std::floating_point T>
+[[nodiscard]] constexpr std::optional<Vec3<T>>
+correction(const Cuboid<T> &outer, const LineSegment3<T> &inner,
+           T epsilon = defaultEpsilon<T>) {
+  return detail::fitBox(outer, detail::bounds(inner), epsilon);
+}
+
+/// Returns the smallest move that puts the triangle `inner` entirely within the
+/// cuboid `outer`: the zero vector when it already fits, and no value when
+/// it is too big to fit however it is moved.
+///
+/// Apply it with `inner.translateBy()`.
+/// @param epsilon How much too big `inner` may be and still count as fitting;
+/// it is then centered on `outer`.
+template <std::floating_point T>
+[[nodiscard]] constexpr std::optional<Vec3<T>>
+correction(const Cuboid<T> &outer, const Triangle3<T> &inner,
+           T epsilon = defaultEpsilon<T>) {
+  return detail::fitBox(outer, detail::bounds(inner), epsilon);
+}
+
+/// Returns the smallest move that puts the disc `inner` entirely within the
+/// cuboid `outer`: the zero vector when it already fits, and no value when
+/// it is too big to fit however it is moved.
+///
+/// Apply it with `inner.translateBy()`.
+/// @param epsilon How much too big `inner` may be and still count as fitting;
+/// it is then centered on `outer`.
+template <std::floating_point T>
+[[nodiscard]] std::optional<Vec3<T>> correction(const Cuboid<T> &outer,
+                                                const Circle3<T> &inner,
+                                                T epsilon = defaultEpsilon<T>) {
+  return detail::fitBox(outer, detail::bounds(inner), epsilon);
+}
+
+/// Returns the smallest move that puts the rectangle `inner` entirely within
+/// the cuboid `outer`: the zero vector when it already fits, and no value when
+/// it is too big to fit however it is moved.
+///
+/// Apply it with `inner.translateBy()`.
+/// @param epsilon How much too big `inner` may be and still count as fitting;
+/// it is then centered on `outer`.
+template <std::floating_point T>
+[[nodiscard]] constexpr std::optional<Vec3<T>>
+correction(const Cuboid<T> &outer, const Rectangle3<T> &inner,
+           T epsilon = defaultEpsilon<T>) {
+  return detail::fitBox(outer, detail::bounds(inner), epsilon);
+}
+
+/// Returns the smallest move that puts the sphere `inner` entirely within the
+/// box `outer`: the zero vector when it already fits, and no value when
+/// it is too big to fit however it is moved.
+///
+/// Apply it with `inner.translateBy()`.
+///
+/// The move only translates `inner`; it is never rotated to fit.
+/// @param epsilon How much too big `inner` may be and still count as fitting;
+/// it is then centered on `outer`.
+template <std::floating_point T>
+[[nodiscard]] std::optional<Vec3<T>> correction(const OrientedCuboid<T> &outer,
+                                                const Sphere<T> &inner,
+                                                T epsilon = defaultEpsilon<T>) {
+  // In the box's own frame, it is an axis-aligned cuboid.
+  const detail::BoxFrame frame(outer);
+  const auto shift =
+      detail::fitBox(frame.box, detail::localBounds(frame, inner), epsilon);
+  if (!shift)
+    return std::nullopt;
+  return frame.toWorldDirection(*shift);
+}
+
+/// Returns the smallest move that puts the cuboid `inner` entirely within the
+/// box `outer`: the zero vector when it already fits, and no value when
+/// it is too big to fit however it is moved.
+///
+/// Apply it with `inner.translateBy()`.
+///
+/// The move only translates `inner`; it is never rotated to fit.
+/// @param epsilon How much too big `inner` may be and still count as fitting;
+/// it is then centered on `outer`.
+template <std::floating_point T>
+[[nodiscard]] std::optional<Vec3<T>> correction(const OrientedCuboid<T> &outer,
+                                                const Cuboid<T> &inner,
+                                                T epsilon = defaultEpsilon<T>) {
+  // In the box's own frame, it is an axis-aligned cuboid.
+  const detail::BoxFrame frame(outer);
+  const auto shift =
+      detail::fitBox(frame.box, detail::localBounds(frame, inner), epsilon);
+  if (!shift)
+    return std::nullopt;
+  return frame.toWorldDirection(*shift);
+}
+
+/// Returns the smallest move that puts the box `inner` entirely within the
+/// box `outer`: the zero vector when it already fits, and no value when
+/// it is too big to fit however it is moved.
+///
+/// Apply it with `inner.translateBy()`.
+///
+/// The move only translates `inner`; it is never rotated to fit.
+/// @param epsilon How much too big `inner` may be and still count as fitting;
+/// it is then centered on `outer`.
+template <std::floating_point T>
+[[nodiscard]] std::optional<Vec3<T>> correction(const OrientedCuboid<T> &outer,
+                                                const OrientedCuboid<T> &inner,
+                                                T epsilon = defaultEpsilon<T>) {
+  // In the box's own frame, it is an axis-aligned cuboid.
+  const detail::BoxFrame frame(outer);
+  const auto shift =
+      detail::fitBox(frame.box, detail::localBounds(frame, inner), epsilon);
+  if (!shift)
+    return std::nullopt;
+  return frame.toWorldDirection(*shift);
+}
+
+/// Returns the smallest move that puts the segment `inner` entirely within the
+/// box `outer`: the zero vector when it already fits, and no value when
+/// it is too big to fit however it is moved.
+///
+/// Apply it with `inner.translateBy()`.
+///
+/// The move only translates `inner`; it is never rotated to fit.
+/// @param epsilon How much too big `inner` may be and still count as fitting;
+/// it is then centered on `outer`.
+template <std::floating_point T>
+[[nodiscard]] std::optional<Vec3<T>> correction(const OrientedCuboid<T> &outer,
+                                                const LineSegment3<T> &inner,
+                                                T epsilon = defaultEpsilon<T>) {
+  // In the box's own frame, it is an axis-aligned cuboid.
+  const detail::BoxFrame frame(outer);
+  const auto shift =
+      detail::fitBox(frame.box, detail::localBounds(frame, inner), epsilon);
+  if (!shift)
+    return std::nullopt;
+  return frame.toWorldDirection(*shift);
+}
+
+/// Returns the smallest move that puts the triangle `inner` entirely within the
+/// box `outer`: the zero vector when it already fits, and no value when
+/// it is too big to fit however it is moved.
+///
+/// Apply it with `inner.translateBy()`.
+///
+/// The move only translates `inner`; it is never rotated to fit.
+/// @param epsilon How much too big `inner` may be and still count as fitting;
+/// it is then centered on `outer`.
+template <std::floating_point T>
+[[nodiscard]] std::optional<Vec3<T>> correction(const OrientedCuboid<T> &outer,
+                                                const Triangle3<T> &inner,
+                                                T epsilon = defaultEpsilon<T>) {
+  // In the box's own frame, it is an axis-aligned cuboid.
+  const detail::BoxFrame frame(outer);
+  const auto shift =
+      detail::fitBox(frame.box, detail::localBounds(frame, inner), epsilon);
+  if (!shift)
+    return std::nullopt;
+  return frame.toWorldDirection(*shift);
+}
+
+/// Returns the smallest move that puts the disc `inner` entirely within the
+/// box `outer`: the zero vector when it already fits, and no value when
+/// it is too big to fit however it is moved.
+///
+/// Apply it with `inner.translateBy()`.
+///
+/// The move only translates `inner`; it is never rotated to fit.
+/// @param epsilon How much too big `inner` may be and still count as fitting;
+/// it is then centered on `outer`.
+template <std::floating_point T>
+[[nodiscard]] std::optional<Vec3<T>> correction(const OrientedCuboid<T> &outer,
+                                                const Circle3<T> &inner,
+                                                T epsilon = defaultEpsilon<T>) {
+  // In the box's own frame, it is an axis-aligned cuboid.
+  const detail::BoxFrame frame(outer);
+  const auto shift =
+      detail::fitBox(frame.box, detail::localBounds(frame, inner), epsilon);
+  if (!shift)
+    return std::nullopt;
+  return frame.toWorldDirection(*shift);
+}
+
+/// Returns the smallest move that puts the rectangle `inner` entirely within
+/// the box `outer`: the zero vector when it already fits, and no value when it
+/// is too big to fit however it is moved.
+///
+/// Apply it with `inner.translateBy()`.
+///
+/// The move only translates `inner`; it is never rotated to fit.
+/// @param epsilon How much too big `inner` may be and still count as fitting;
+/// it is then centered on `outer`.
+template <std::floating_point T>
+[[nodiscard]] std::optional<Vec3<T>> correction(const OrientedCuboid<T> &outer,
+                                                const Rectangle3<T> &inner,
+                                                T epsilon = defaultEpsilon<T>) {
+  // In the box's own frame, it is an axis-aligned cuboid.
+  const detail::BoxFrame frame(outer);
+  const auto shift =
+      detail::fitBox(frame.box, detail::localBounds(frame, inner), epsilon);
+  if (!shift)
+    return std::nullopt;
+  return frame.toWorldDirection(*shift);
+}
+
+/// Returns the smallest move that puts the sphere `inner` entirely within the
+/// sphere `outer`: the zero vector when it already fits, and no value when
+/// it is too big to fit however it is moved.
+///
+/// Apply it with `inner.translateBy()`.
+/// @param epsilon How much too big `inner` may be and still count as fitting;
+/// it is then centered on `outer`.
+template <std::floating_point T>
+[[nodiscard]] std::optional<Vec3<T>> correction(const Sphere<T> &outer,
+                                                const Sphere<T> &inner,
+                                                T epsilon = defaultEpsilon<T>) {
+  return detail::fitRound(outer.center, outer.radius, inner.center,
+                          inner.radius, epsilon);
 }
 
 using Circlef = Circle<float>;

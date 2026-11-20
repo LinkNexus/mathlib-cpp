@@ -2303,6 +2303,184 @@ template <class T> void test_contains3d() {
   TEST_ASSERT(farAway, "nothing contains a shape far away from it");
 }
 
+template <class T> void test_translation() {
+  TEST_SUITE("translatedBy");
+  using V2 = mathlib::Vec2<T>;
+  using V3 = Vec3<T>;
+  const V2 d2(3, -1);
+  const V3 d3(3, -1, 2);
+
+  TEST_ASSERT(
+      near(mathlib::Circle<T>{{1, 2}, 4}.translatedBy(d2).center, V2(4, 1)),
+      "Circle");
+  const auto r = mathlib::Rectangle<T>{{0, 0}, {2, 1}}.translatedBy(d2);
+  TEST_ASSERT(near(r.min, d2) && near(r.max, V2(5, 0)), "Rectangle");
+  const auto s = mathlib::LineSegment<T>{{0, 0}, {1, 1}}.translatedBy(d2);
+  TEST_ASSERT(near(s.start, d2) && near(s.end, V2(4, 0)), "LineSegment");
+  const auto t = mathlib::Triangle<T>{{0, 0}, {1, 0}, {0, 1}}.translatedBy(d2);
+  TEST_ASSERT(near(t.a, d2) && near(t.b, V2(4, -1)) && near(t.c, V2(3, 0)),
+              "Triangle");
+
+  const auto sp = mathlib::Sphere<T>{{1, 1, 1}, 2}.translatedBy(d3);
+  TEST_ASSERT(near(sp.center, V3(4, 0, 3)) && near(sp.radius, T(2)), "Sphere");
+  const auto b = mathlib::Cuboid<T>{{0, 0, 0}, {1, 2, 3}}.translatedBy(d3);
+  TEST_ASSERT(near(b.min, d3) && near(b.max, V3(4, 1, 5)), "Cuboid");
+  const auto s3 =
+      mathlib::LineSegment3<T>{{0, 0, 0}, {1, 1, 1}}.translatedBy(d3);
+  TEST_ASSERT(near(s3.start, d3) && near(s3.end, V3(4, 0, 3)), "LineSegment3");
+  const auto t3 =
+      mathlib::Triangle3<T>{{0, 0, 0}, {1, 0, 0}, {0, 1, 0}}.translatedBy(d3);
+  TEST_ASSERT(near(t3.a, d3) && near(t3.b, V3(4, -1, 2)) &&
+                  near(t3.c, V3(3, 0, 2)),
+              "Triangle3");
+  const auto disc =
+      mathlib::Circle3<T>{{0, 0, 0}, 1, V3::unitX()}.translatedBy(d3);
+  TEST_ASSERT(near(disc.center, d3) && near(disc.normal, V3::unitX()),
+              "Circle3 keeps its normal");
+  const auto r3 =
+      mathlib::Rectangle3<T>{{0, 0, 0}, {1, 0, 0}, {0, 1, 0}}.translatedBy(d3);
+  TEST_ASSERT(near(r3.corner, d3) && near(r3.u, V3(1, 0, 0)), "Rectangle3");
+  const auto box =
+      mathlib::OrientedCuboid<T>{{0, 0, 0}, {1, 0, 0}, {0, 1, 0}, {0, 0, 1}}
+          .translatedBy(d3);
+  TEST_ASSERT(near(box.corner, d3) && near(box.w, V3(0, 0, 1)),
+              "OrientedCuboid");
+
+  auto m = mathlib::Cuboid<T>{{0, 0, 0}, {1, 1, 1}};
+  TEST_ASSERT(&m.translateBy(d3) == &m && near(m.min, d3),
+              "translateBy in place");
+  static_assert(
+      mathlib::Rectangle<T>{{0, 0}, {1, 1}}.translatedBy({1, 1}).max.x == 2);
+}
+
+// Returns `shape` moved by `offset`.
+template <class Shape, class V>
+Shape movedBy(const Shape &shape, const V &offset) {
+  return shape.translatedBy(offset);
+}
+
+template <class T> void test_correction() {
+  TEST_SUITE("correction");
+  using V2 = mathlib::Vec2<T>;
+  using V3 = Vec3<T>;
+  using C = mathlib::Circle<T>;
+  using R = mathlib::Rectangle<T>;
+  using S = mathlib::LineSegment<T>;
+  using Tr = mathlib::Triangle<T>;
+  using Sp = mathlib::Sphere<T>;
+  using B = mathlib::Cuboid<T>;
+  using O = mathlib::OrientedCuboid<T>;
+  using S3 = mathlib::LineSegment3<T>;
+  using Tr3 = mathlib::Triangle3<T>;
+  using D = mathlib::Circle3<T>;
+  using R3 = mathlib::Rectangle3<T>;
+  using mathlib::contains;
+  using mathlib::correction;
+  constexpr T pi = std::numbers::pi_v<T>;
+
+  const R screen{{0, 0}, {10, 10}};
+  auto is = [](const auto &result, const auto &expected) {
+    return result && near(*result, expected);
+  };
+  TEST_ASSERT(is(correction(screen, R{{8, 8}, {12, 9}}), V2(-2, 0)) &&
+                  is(correction(screen, R{{2, 2}, {4, 4}}), V2(0, 0)),
+              "rectangle in rectangle");
+  TEST_ASSERT(!correction(screen, R{{-1, 0}, {12, 2}}),
+              "too wide a rectangle cannot fit");
+  TEST_ASSERT(is(correction(screen, R{{-1, 0}, {9, 2}}), V2(1, 0)),
+              "an exactly fitting rectangle moves fully inside");
+  TEST_ASSERT(is(correction(screen, C{{1, 5}, 2}), V2(1, 0)) &&
+                  !correction(screen, C{{5, 5}, 6}),
+              "circle in rectangle");
+  TEST_ASSERT(is(correction(screen, S{{-3, 5}, {4, 5}}), V2(3, 0)),
+              "segment in rectangle");
+  TEST_ASSERT(is(correction(screen, Tr{{8, 8}, {12, 9}, {9, 11}}), V2(-2, -1)),
+              "triangle in rectangle");
+  TEST_ASSERT(is(correction(C{{0, 0}, 5}, C{{4, 0}, 2}), V2(-1, 0)) &&
+                  is(correction(C{{0, 0}, 5}, C{{1, 1}, 2}), V2(0, 0)) &&
+                  is(correction(C{{0, 0}, 5}, C{{3, 4}, 5}), V2(-3, -4)) &&
+                  !correction(C{{0, 0}, 5}, C{{0, 0}, 6}),
+              "circle in circle moves towards the center");
+
+  const B room{{0, 0, 0}, {10, 10, 10}};
+  // A cube of side 2 turned 45 degrees about z: it reaches sqrt(2) along x
+  // and y.
+  const O cube =
+      O(B{{-1, -1, -1}, {1, 1, 1}}).rotatedAroundCenter(V3::unitZ(), pi / 4);
+  const T r2 = std::sqrt(T(2));
+  TEST_ASSERT(is(correction(room, Sp{{11, 5, -1}, 1}), V3(-2, 0, 2)),
+              "sphere in cuboid");
+  TEST_ASSERT(is(correction(room, B{{8, 8, 8}, {12, 9, 9}}), V3(-2, 0, 0)) &&
+                  !correction(room, B{{0, 0, 0}, {11, 1, 1}}),
+              "cuboid in cuboid");
+  TEST_ASSERT(is(correction(room, movedBy(cube, V3(10, 5, 5))), V3(-r2, 0, 0)),
+              "rotated box in cuboid uses its true extent");
+  TEST_ASSERT(is(correction(room, D{{10, 5, 10}, 2}), V3(-2, 0, 0)),
+              "disc in cuboid uses its true extent");
+  TEST_ASSERT(is(correction(room, S3{{-1, 5, 5}, {3, 5, 11}}), V3(1, 0, -1)) &&
+                  is(correction(room, Tr3{{9, 9, 9}, {11, 9, 9}, {9, 9, 12}}),
+                     V3(-1, 0, -2)) &&
+                  is(correction(room, R3{{9, 1, 1}, {0, 2, 0}, {3, 0, 0}}),
+                     V3(-2, 0, 0)),
+              "segment, triangle and rectangle in cuboid");
+  const T step = T(0.5) / r2 - 1;
+  TEST_ASSERT(is(correction(cube, Sp{{1, 1, 0}, 0.5}), V3(step, step, 0)) &&
+                  is(correction(cube, Sp{{0, 0, 0}, 0.5}), V3(0, 0, 0)) &&
+                  !correction(cube, Sp{{0, 0, 0}, 1.1}),
+              "sphere in rotated box moves across its face");
+  TEST_ASSERT(is(correction(cube, movedBy(cube, V3(1, 0, 3))), V3(-1, 0, -3)),
+              "a box in an equal box moves onto it");
+  TEST_ASSERT(!correction(cube, B{{-1, -1, -1}, {1, 1, 1}}),
+              "the unrotated cube does not fit in the rotated one");
+  TEST_ASSERT(
+      is(correction(Sp{{0, 0, 0}, 5}, Sp{{0, 0, 4}, 2}), V3(0, 0, -1)) &&
+          !correction(Sp{{0, 0, 0}, 5}, Sp{{0, 0, 4}, 6}),
+      "sphere in sphere");
+
+  // Moving by the correction must make the shape fit, and a shape that
+  // already fits must not move.
+  bool fits = true, stays = true;
+  auto check = [&](const auto &outer, const auto &inner) {
+    const auto shift = correction(outer, inner);
+    if (!shift)
+      return;
+    fits &= contains(outer, movedBy(inner, *shift));
+    if (contains(outer, inner))
+      stays &= shift->length() <= tol<T>();
+  };
+  const R rects[] = {screen, {{-2, -3}, {1, 2}}};
+  for (const auto &r : rects)
+    for (const V2 &offset : {V2(0, 0), V2(9, -4), V2(-20, 3)}) {
+      check(r, movedBy(C{{1, 1}, 1}, offset));
+      check(r, movedBy(R{{0, 0}, {2, 1}}, offset));
+      check(r, movedBy(S{{0, 0}, {3, 2}}, offset));
+      check(r, movedBy(Tr{{0, 0}, {2, 0}, {1, 2}}, offset));
+    }
+  for (const V2 &offset : {V2(0, 0), V2(9, -4), V2(-20, 3)})
+    check(C{{0, 0}, 5}, movedBy(C{{1, 1}, 2}, offset));
+  const O tilted =
+      O(B{{-1, -2, -1}, {3, 1, 4}}).rotatedAroundCenter(V3(1, 2, 3), 1);
+  const O boxes[] = {cube.scaledFromCenterBy(4), tilted};
+  auto inners3d = [&](auto &&each) {
+    for (const V3 &offset : {V3(0, 0, 0), V3(9, -4, 2), V3(-20, 3, 7)}) {
+      each(movedBy(Sp{{0, 0, 0}, 1}, offset));
+      each(movedBy(B{{0, 0, 0}, {2, 1, 1}}, offset));
+      each(movedBy(cube, offset));
+      each(movedBy(S3{{0, 0, 0}, {2, 1, 1}}, offset));
+      each(movedBy(Tr3{{0, 0, 0}, {2, 0, 1}, {1, 1, 0}}, offset));
+      each(movedBy(D{{0, 0, 0}, 1, {1, 2, 3}}, offset));
+      each(movedBy(R3{{0, 0, 0}, {1, 1, 0}, {0, 0, 2}}, offset));
+    }
+  };
+  inners3d([&](const auto &inner) { check(room, inner); });
+  for (const auto &box : boxes)
+    inners3d([&](const auto &inner) { check(box, inner); });
+  for (const V3 &offset : {V3(0, 0, 0), V3(9, -4, 2), V3(-20, 3, 7)})
+    check(Sp{{0, 0, 0}, 5}, movedBy(Sp{{1, 1, 0}, 2}, offset));
+  TEST_ASSERT(fits, "moving by the correction makes every shape fit");
+  TEST_ASSERT(stays, "a shape that already fits is not moved");
+}
+
 template <class T> void test_cuboid_flattening() {
   TEST_SUITE("Cuboid flattening");
   using B = mathlib::Cuboid<T>;
@@ -2672,6 +2850,8 @@ template <class T> void run_all(const char *type) {
   test_rectangle3_flattening<T>();
   test_oriented_cuboid<T>();
   test_contains3d<T>();
+  test_translation<T>();
+  test_correction<T>();
   test_lifting_to_3d<T>();
   test_intersects3d_symmetry<T>();
   test_shapes3d_factories<T>();
