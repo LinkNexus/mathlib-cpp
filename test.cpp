@@ -1837,6 +1837,233 @@ template <class T> void test_point_at() {
               "Rectangle3 pointAt follows u and v");
 }
 
+template <class T> void test_oriented_cuboid() {
+  TEST_SUITE("OrientedCuboid");
+  using B = mathlib::Cuboid<T>;
+  using O = mathlib::OrientedCuboid<T>;
+  using R3 = mathlib::Rectangle3<T>;
+  using V3 = Vec3<T>;
+  constexpr T pi = std::numbers::pi_v<T>;
+
+  const B aligned{{1, 2, 3}, {3, 6, 9}};
+  const O fromAligned = aligned;
+  TEST_ASSERT(near(fromAligned.corner, aligned.min) &&
+                  near(fromAligned.u, V3(2, 0, 0)) &&
+                  near(fromAligned.v, V3(0, 4, 0)) &&
+                  near(fromAligned.w, V3(0, 0, 6)),
+              "converts from a Cuboid with edges along +x, +y, +z");
+  bool sameCorners = true;
+  for (std::size_t i = 0; i < 8; i++)
+    sameCorners &= near(fromAligned.corners()[i], aligned.corners()[i]);
+  TEST_ASSERT(sameCorners, "corners() in the same order as Cuboid");
+  bool sameFaces = true;
+  for (std::size_t i = 0; i < 6; i++)
+    sameFaces &=
+        near(fromAligned.faces()[i].corner, aligned.faces()[i].corner) &&
+        near(fromAligned.faces()[i].u, aligned.faces()[i].u) &&
+        near(fromAligned.faces()[i].v, aligned.faces()[i].v);
+  TEST_ASSERT(sameFaces, "faces() match Cuboid");
+  TEST_ASSERT(near(fromAligned.center(), aligned.center()) &&
+                  near(fromAligned.pointAt({0.5, 0, 0.1}),
+                       aligned.pointAt({0.5, 0, 0.1})),
+              "center and pointAt match Cuboid");
+  TEST_ASSERT(near(fromAligned.volume(), T(48)), "volume");
+  TEST_ASSERT(near(fromAligned.boundingBox().min, aligned.min) &&
+                  near(fromAligned.boundingBox().max, aligned.max),
+              "boundingBox of an aligned box is the Cuboid itself");
+  TEST_ASSERT(
+      near(O::fromCenterAndSides({1, 1, 1}, {2, 0, 0}, {0, 2, 0}, {0, 0, 2})
+               .corner,
+           V3(0, 0, 0)),
+      "fromCenterAndSides");
+
+  // A cube of side 2 at the origin turned 45 degrees about z: its
+  // cross-section is a diamond with corners at distance sqrt(2) on the axes.
+  const O cube =
+      O(B{{-1, -1, -1}, {1, 1, 1}}).rotatedAroundCenter(V3::unitZ(), pi / 4);
+  const T r2 = std::sqrt(T(2));
+  TEST_ASSERT(near(cube.center(), V3()) && near(cube.volume(), T(8)),
+              "rotating about the center keeps center and volume");
+  TEST_ASSERT(near(cube.corner, V3(0, -r2, -1)),
+              "rotatedAroundCenter moves the corners");
+  TEST_ASSERT(near(cube.boundingBox().min, V3(-r2, -r2, -1)) &&
+                  near(cube.boundingBox().max, V3(r2, r2, 1)),
+              "boundingBox of a rotated box");
+  const O turned =
+      O(B{{1, 0, 0}, {2, 1, 1}}).rotatedAroundPoint(V3(), V3::unitZ(), pi / 2);
+  TEST_ASSERT(near(turned.corner, V3(0, 1, 0)) && near(turned.u, V3(0, 1, 0)),
+              "rotatedAroundPoint turns about that point");
+  auto m = cube;
+  TEST_ASSERT(&m.rotateAroundCenter(V3::unitZ(), -pi / 4) == &m &&
+                  near(m.corner, V3(-1, -1, -1)),
+              "rotateAroundCenter in place");
+
+  TEST_ASSERT(cube.containsPoint({1.4, 0, 0}) && !cube.containsPoint({1, 1, 0}),
+              "containsPoint follows the rotation, not the bounding box");
+  TEST_ASSERT(near(cube.closestPointTo({1, 1, 0}), V3(r2 / 2, r2 / 2, 0)) &&
+                  near(cube.distanceTo({1, 1, 0}), r2 - 1),
+              "closestPointTo and distanceTo");
+  TEST_ASSERT(near(cube.closestPointTo({0.1, 0.2, 0.3}), V3(0.1, 0.2, 0.3)),
+              "closestPointTo inside is the point");
+  TEST_ASSERT(near(cube.pointAt({1, 0.5, 0.5}), V3(r2 / 2, r2 / 2, 0)),
+              "pointAt follows the edges");
+
+  const auto uv = cube.flattenedToUV(T(0.5));
+  TEST_ASSERT(near(uv.w, V3()) && near(uv.u, cube.u) &&
+                  near(uv.center(), cube.center()),
+              "flattenedToUV at 0.5 is the middle cross-section");
+  const R3 uvRect = cube.template flattenedToUV<R3>(T(0.5));
+  TEST_ASSERT(near(uvRect.center(), cube.center()) &&
+                  near(uvRect.normal(), V3::unitZ()),
+              "flattenedToUV as a Rectangle3 faces along w");
+  const R3 uwRect = cube.template flattenedToUW<R3>();
+  TEST_ASSERT(near(uwRect.corner, cube.corner) && near(uwRect.u, cube.w) &&
+                  near(uwRect.v, cube.u) &&
+                  near(uwRect.normal(), cube.v.normalized()),
+              "flattenedToUW as a Rectangle3 faces along v");
+  const R3 vwRect = cube.template flattenedToVW<R3>(1);
+  TEST_ASSERT(near(vwRect.corner, cube.corner + cube.u) &&
+                  near(vwRect.normal(), cube.u.normalized()),
+              "flattenedToVW at 1 is the far face, facing along u");
+  m = cube;
+  TEST_ASSERT(&m.flattenToUW(1) == &m && near(m.v, V3()) &&
+                  near(m.corner, cube.corner + cube.v),
+              "flattenToUW in place");
+  m = cube;
+  TEST_ASSERT(&m.flattenToVW() == &m && near(m.u, V3()), "flattenToVW");
+  m = cube;
+  TEST_ASSERT(&m.flattenToUV() == &m && near(m.w, V3()), "flattenToUV");
+
+  const auto grown = cube.resizedBy(T(2));
+  TEST_ASSERT(near(grown.u.length(), T(4)) && near(grown.v.length(), T(4)) &&
+                  near(grown.w.length(), T(4)) &&
+                  near(grown.center(), cube.center()) &&
+                  near(grown.u.normalized(), cube.u.normalized()),
+              "resizedBy grows each edge about the center");
+  const auto stretched = cube.resizedBy(V3(2, 0, -1));
+  TEST_ASSERT(near(stretched.u.length(), T(4)) &&
+                  near(stretched.v.length(), T(2)) &&
+                  near(stretched.w.length(), T(1)),
+              "resizedBy with a vector");
+  TEST_ASSERT(near(cube.scaledFromCenterBy(2).volume(), T(64)) &&
+                  near(cube.scaledFromCenterBy(2).center(), cube.center()),
+              "scaledFromCenterBy");
+  TEST_ASSERT(near(cube.scaledFromCornerBy(3).corner, cube.corner) &&
+                  near(cube.scaledFromCornerBy(3).u, cube.u * T(3)),
+              "scaledFromCornerBy");
+  TEST_ASSERT(near((cube * T(2)).corner, cube.corner * T(2)) &&
+                  near((T(2) * cube).w, cube.w * T(2)) &&
+                  near((cube / T(2)).v, cube.v / T(2)),
+              "operators * and /");
+
+  // The point (1, 1, 0) is inside the bounding box but outside the cube.
+  const mathlib::Sphere<T> nearCorner{{1, 1, 0}, T(0.1)};
+  TEST_ASSERT(!intersects(cube, nearCorner) &&
+                  intersects(cube.boundingBox(), nearCorner),
+              "intersects sphere follows the rotation");
+  TEST_ASSERT(intersects(cube, mathlib::Sphere<T>{{1, 1, 0}, T(0.5)}),
+              "intersects sphere reaching a face");
+  TEST_ASSERT(
+      !intersects(cube, mathlib::LineSegment3<T>{{1, 1, -5}, {1, 1, 5}}) &&
+          intersects(cube, mathlib::LineSegment3<T>{{0, 0, -5}, {0, 0, 5}}),
+      "intersects segment");
+  TEST_ASSERT(!intersects(cube, B{{0.9, 0.9, -1}, {1.1, 1.1, 1}}) &&
+                  intersects(cube, B{{0.5, 0.5, 0}, {1, 1, 2}}),
+              "intersects Cuboid");
+  TEST_ASSERT(intersects(cube, cube.rotatedAroundCenter(V3(1, 2, 3), 1)) &&
+                  !intersects(cube, O(B{{1, 1, -1}, {2, 2, 1}})) &&
+                  intersects(cube, O(B{{0.6, 0.6, -1}, {2, 2, 1}})),
+              "intersects OrientedCuboid");
+  TEST_ASSERT(
+      !intersects(cube,
+                  mathlib::Triangle3<T>{{1, 1, 0}, {3, 1, 0}, {1, 3, 0}}) &&
+          intersects(
+              cube, mathlib::Triangle3<T>{{0.5, 0.5, 0}, {3, 1, 0}, {1, 3, 0}}),
+      "intersects triangle");
+  TEST_ASSERT(!intersects(cube, R3{{1, 1, -1}, {1, 0, 0}, {0, 1, 0}}) &&
+                  intersects(cube, R3{{0.6, 0.6, 0}, {1, 0, 0}, {0, 1, 0}}),
+              "intersects rectangle");
+  // The disc's center is (3 - sqrt(2)) / sqrt(2), about 1.12, from the cube.
+  TEST_ASSERT(!intersects(cube, mathlib::Circle3<T>{{1.5, 1.5, 0}, T(0.5)}) &&
+                  intersects(cube, mathlib::Circle3<T>{{1.5, 1.5, 0}, T(1.2)}),
+              "intersects disc");
+  TEST_ASSERT(intersects(cube, cube.flattenedToUV(T(0.5))) &&
+                  !intersects(cube.flattenedToUV(2), cube),
+              "intersects with a flattened box");
+
+  // An aligned box must behave exactly like the Cuboid it came from, and
+  // turning it together with the other shape must not change the result.
+  const B cuboids[] = {{{0, 0, 0}, {2, 2, 2}}, {{4, -1, 0}, {6, 1, 1}}};
+  const mathlib::Sphere<T> spheres[] = {
+      {{1, 1, 1}, 1}, {{5, 5, 5}, T(0.5)}, {{3, 3, 1}, T(1.3)}};
+  const mathlib::LineSegment3<T> segments[] = {{{-1, 1, 1}, {3, 1, 1}},
+                                               {{4, 4, 4}, {6, 6, 6}},
+                                               {{3, -2, 0.5}, {7, 2, 0.5}}};
+  const mathlib::Triangle3<T> triangles[] = {{{0, 0, 1}, {3, 0, 1}, {0, 3, 1}},
+                                             {{5, 0, 3}, {7, 0, 3}, {6, 2, 4}}};
+  const mathlib::Circle3<T> circles[] = {{{1, 1, -0.5}, 1, {0, 1, 1}},
+                                         {{6, 0, 2}, T(0.8)}};
+  const R3 rects[] = {{{-1, -1, 1}, {4, 0, 0}, {0, 4, 0}},
+                      {{5, 5, 5}, {0, 1, 0}, {0, 0, 1}}};
+  const V3 pivot(1, -1, 2), axis(1, 2, 3);
+  const T angle = T(0.7);
+  auto turn = [&](const V3 &p) {
+    return pivot + (p - pivot).rotatedAroundAxis(axis, angle);
+  };
+  bool sameAsCuboid = true, sameWhenTurned = true;
+  auto check = [&](const B &cuboid, const auto &shape,
+                   const auto &turnedShape) {
+    const O box = cuboid;
+    const bool expected = intersects(cuboid, shape);
+    sameAsCuboid &= intersects(box, shape) == expected;
+    sameWhenTurned &= intersects(box.rotatedAroundPoint(pivot, axis, angle),
+                                 turnedShape) == expected;
+  };
+  for (const auto &c : cuboids) {
+    for (const auto &s : spheres)
+      check(c, s, mathlib::Sphere<T>{turn(s.center), s.radius});
+    for (const auto &s : segments)
+      check(c, s, mathlib::LineSegment3<T>{turn(s.start), turn(s.end)});
+    for (const auto &t : triangles)
+      check(c, t, mathlib::Triangle3<T>{turn(t.a), turn(t.b), turn(t.c)});
+    for (const auto &d : circles)
+      check(c, d,
+            mathlib::Circle3<T>{turn(d.center), d.radius,
+                                d.normal.rotatedAroundAxis(axis, angle)});
+    for (const auto &r : rects)
+      check(c, r,
+            R3{turn(r.corner), r.u.rotatedAroundAxis(axis, angle),
+               r.v.rotatedAroundAxis(axis, angle)});
+    for (const auto &other : cuboids)
+      check(c, other, O(other).rotatedAroundPoint(pivot, axis, angle));
+  }
+  TEST_ASSERT(sameAsCuboid, "an aligned box intersects like its Cuboid");
+  TEST_ASSERT(sameWhenTurned, "turning both shapes keeps the result");
+
+  bool symmetric = true;
+  const O boxes[] = {cube, O(cuboids[1]).rotatedAroundCenter(axis, angle)};
+  auto symmetry = [&](const auto &others) {
+    for (const auto &a : boxes)
+      for (const auto &b : others)
+        symmetric &= intersects(a, b) == intersects(b, a);
+  };
+  symmetry(cuboids);
+  symmetry(spheres);
+  symmetry(segments);
+  symmetry(triangles);
+  symmetry(circles);
+  symmetry(rects);
+  symmetry(boxes);
+  TEST_ASSERT(symmetric, "intersects(a, b) == intersects(b, a)");
+
+  const O printed = B{{0, 0, 0}, {1, 2, 3}};
+  const std::string text =
+      "OrientedCuboid(corner: Vec3(0, 0, 0), u: Vec3(1, 0, "
+      "0), v: Vec3(0, 2, 0), w: Vec3(0, 0, 3))";
+  TEST_ASSERT(std::format("{}", printed) == text && streamed(printed) == text,
+              "format and operator<<");
+}
+
 template <class T> void test_cuboid_flattening() {
   TEST_SUITE("Cuboid flattening");
   using B = mathlib::Cuboid<T>;
@@ -2203,6 +2430,7 @@ template <class T> void run_all(const char *type) {
   test_cuboid_flattening<T>();
   test_rectangle_flattening<T>();
   test_rectangle3_flattening<T>();
+  test_oriented_cuboid<T>();
   test_lifting_to_3d<T>();
   test_intersects3d_symmetry<T>();
   test_shapes3d_factories<T>();

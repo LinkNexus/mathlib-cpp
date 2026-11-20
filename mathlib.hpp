@@ -1386,6 +1386,10 @@ template <std::floating_point T> struct LineSegment {
 
 /// An axis-aligned rectangle in 2D, given by its `min` and `max` corners.
 ///
+/// It cannot be rotated: its sides always run along x and y, which is why its
+/// flatten functions are named after those axes. In 3D, `Rectangle3` is the
+/// rectangle that can face any way.
+///
 /// Expects `min <= max` on both axes; the factory functions always produce such
 /// a rectangle, even from negative sizes or unordered corners.
 template <std::floating_point T> struct Rectangle {
@@ -2846,6 +2850,10 @@ template <std::floating_point T> struct Rectangle3 {
 
 /// An axis-aligned box in 3D, given by its `min` and `max` corners.
 ///
+/// It cannot be rotated: its edges always run along x, y and z, which keeps it
+/// small and its tests fast, and is why its flatten functions are named after
+/// those axes. For a box that can face any way, use `OrientedCuboid`.
+///
 /// Expects `min <= max` on every axis; the factory functions always produce
 /// such a cuboid, even from negative sizes or unordered corners.
 template <std::floating_point T> struct Cuboid {
@@ -3261,6 +3269,422 @@ template <std::floating_point T> struct Cuboid {
   /// Writes the cuboid as `Cuboid(min: Vec3(x, y, z), max: Vec3(x, y, z))`.
   friend std::ostream &operator<<(std::ostream &os, const Cuboid &c) {
     return os << "Cuboid(min: " << c.min << ", max: " << c.max << ")";
+  }
+};
+
+/// A box in 3D that can face any way, with corner `corner` and the edges `u`,
+/// `v` and `w` leading from it.
+///
+/// `u`, `v` and `w` are expected to be mutually orthogonal, and every function
+/// relies on it. Any of them may be zero, giving a flat box (a rectangle), a
+/// segment or a point. For a box that stays aligned with the axes, `Cuboid` is
+/// smaller and faster, and converts to this type without loss.
+template <std::floating_point T> struct OrientedCuboid {
+  /// One corner of the box.
+  Vec3<T> corner;
+  /// The first edge, starting at `corner`.
+  Vec3<T> u;
+  /// The second edge, starting at `corner`; expected to be orthogonal to `u`
+  /// and `w`.
+  Vec3<T> v;
+  /// The third edge, starting at `corner`; expected to be orthogonal to `u`
+  /// and `v`.
+  Vec3<T> w;
+
+  /// Creates a degenerate box with every point at the origin.
+  constexpr OrientedCuboid() = default;
+  /// Creates a box from a corner and its three edges.
+  /// @pre `u`, `v` and `w` are mutually orthogonal.
+  constexpr OrientedCuboid(const Vec3<T> &corner, const Vec3<T> &u,
+                           const Vec3<T> &v, const Vec3<T> &w)
+      : corner(corner), u(u), v(v), w(w) {}
+  /// Creates the box covering exactly the same space as `cuboid`, with `u`,
+  /// `v` and `w` along +x, +y and +z.
+  ///
+  /// Implicit, since no information is lost: a function taking an
+  /// `OrientedCuboid` also accepts a `Cuboid`.
+  constexpr OrientedCuboid(const Cuboid<T> &cuboid)
+      : corner(cuboid.min), u(cuboid.max.x - cuboid.min.x, 0, 0),
+        v(0, cuboid.max.y - cuboid.min.y, 0),
+        w(0, 0, cuboid.max.z - cuboid.min.z) {}
+
+  /// Returns the box centered at `center` with edges `u`, `v` and `w`.
+  /// @pre `u`, `v` and `w` are mutually orthogonal.
+  [[nodiscard]]
+  static constexpr OrientedCuboid
+  fromCenterAndSides(const Vec3<T> &center, const Vec3<T> &u, const Vec3<T> &v,
+                     const Vec3<T> &w) {
+    return {center - (u + v + w) / 2, u, v, w};
+  }
+
+  /// Returns the eight corners: the face through `corner` spanned by `u` and
+  /// `v`, starting at `corner` and going along `u` first, then the same four
+  /// moved along `w`.
+  ///
+  /// For a box made from a `Cuboid`, this is the same order as
+  /// `Cuboid::corners()`.
+  [[nodiscard]]
+  constexpr std::array<Vec3<T>, 8> corners() const {
+    const auto top = corner + w;
+    return {corner, corner + u, corner + u + v, corner + v,
+            top,    top + u,    top + u + v,    top + v};
+  }
+
+  /// Returns the twelve edges: the four of the face spanned by `u` and `v`
+  /// through `corner`, the four of the opposite face, then the four along `w`
+  /// joining them.
+  [[nodiscard]]
+  constexpr std::array<LineSegment3<T>, 12> edges() const {
+    const auto c = corners();
+    return {LineSegment3<T>{c[0], c[1]}, LineSegment3<T>{c[1], c[2]},
+            LineSegment3<T>{c[2], c[3]}, LineSegment3<T>{c[3], c[0]},
+            LineSegment3<T>{c[4], c[5]}, LineSegment3<T>{c[5], c[6]},
+            LineSegment3<T>{c[6], c[7]}, LineSegment3<T>{c[7], c[4]},
+            LineSegment3<T>{c[0], c[4]}, LineSegment3<T>{c[1], c[5]},
+            LineSegment3<T>{c[2], c[6]}, LineSegment3<T>{c[3], c[7]}};
+  }
+
+  /// Returns the six faces as rectangles: the three through `corner`, then the
+  /// three through the opposite corner.
+  [[nodiscard]]
+  constexpr std::array<Rectangle3<T>, 6> faces() const {
+    const auto opposite = corner + u + v + w;
+    return {Rectangle3<T>{corner, u, v},     Rectangle3<T>{corner, u, w},
+            Rectangle3<T>{corner, v, w},     Rectangle3<T>{opposite, -u, -v},
+            Rectangle3<T>{opposite, -u, -w}, Rectangle3<T>{opposite, -v, -w}};
+  }
+
+  /// Returns the center of the box.
+  [[nodiscard]]
+  constexpr Vec3<T> center() const {
+    return corner + (u + v + w) / 2;
+  }
+
+  /// Returns the point at the given fraction of the way along each edge,
+  /// measured from `corner`: `{0, 0, 0}` is `corner`, `{1, 1, 1}` is the
+  /// opposite corner and `{0.5, 0.5, 0.5}` is `center()`.
+  ///
+  /// @param ratios The fraction along `u`, `v` and `w`. Values outside [0, 1]
+  /// give points outside the box.
+  [[nodiscard]]
+  constexpr Vec3<T> pointAt(const Vec3<T> &ratios) const {
+    return corner + u * ratios.x + v * ratios.y + w * ratios.z;
+  }
+
+  /// Returns the volume, |u . (v x w)|.
+  [[nodiscard]]
+  T volume() const {
+    return std::abs(u.dotProductWith(v.crossProductWith(w)));
+  }
+
+  /// Returns the smallest axis-aligned `Cuboid` containing the box.
+  ///
+  /// Useful as a cheap first test: when the bounding boxes of two shapes do
+  /// not meet, the shapes do not either.
+  [[nodiscard]]
+  Cuboid<T> boundingBox() const {
+    return Cuboid<T>::fromCenterAndSize(
+        center(), {std::abs(u.x) + std::abs(v.x) + std::abs(w.x),
+                   std::abs(u.y) + std::abs(v.y) + std::abs(w.y),
+                   std::abs(u.z) + std::abs(v.z) + std::abs(w.z)});
+  }
+
+  /// Returns the box flattened across `w`: its `u` and `v` edges are kept, and
+  /// its `w` edge collapses onto the plane at `ratio` of the way along it.
+  ///
+  /// `ratio` is measured from `corner` as in `pointAt()`: 0 gives the face
+  /// through `corner`, 1 the opposite face and 0.5 the cross-section through
+  /// `center()`. Values outside [0, 1] give a plane outside the box.
+  ///
+  /// By default the result is a flat `OrientedCuboid` whose `w` is zero. With
+  /// `Shape` set to `Rectangle3<T>` it is a rectangle with sides `u` and `v`,
+  /// so it faces along `u x v`: `c.flattenedToUV<Rectangle3d>(0.5)`.
+  /// @tparam Shape `OrientedCuboid` (the default) or `Rectangle3<T>`.
+  /// @param ratio Where the result lies along `w`, as a fraction of it.
+  template <class Shape = OrientedCuboid>
+    requires std::same_as<Shape, OrientedCuboid> ||
+             std::same_as<Shape, Rectangle3<T>>
+  [[nodiscard]]
+  constexpr Shape flattenedToUV(T ratio = 0) const {
+    const Vec3<T> start = corner + w * ratio;
+    if constexpr (std::same_as<Shape, Rectangle3<T>>)
+      return {start, u, v};
+    else
+      return {start, u, v, Vec3<T>()};
+  }
+
+  /// Same as `flattenedToUV(ratio)`, but modifies this box.
+  /// @return A reference to this box.
+  constexpr OrientedCuboid &flattenToUV(T ratio = 0) {
+    return *this = flattenedToUV(ratio);
+  }
+
+  /// Returns the box flattened across `v`: its `u` and `w` edges are kept, and
+  /// its `v` edge collapses onto the plane at `ratio` of the way along it.
+  ///
+  /// `ratio` is measured from `corner` as in `pointAt()`: 0 gives the face
+  /// through `corner`, 1 the opposite face and 0.5 the cross-section through
+  /// `center()`. Values outside [0, 1] give a plane outside the box.
+  ///
+  /// By default the result is a flat `OrientedCuboid` whose `v` is zero. With
+  /// `Shape` set to `Rectangle3<T>` it is a rectangle with sides `w` and `u`,
+  /// so it faces along `w x u`: `c.flattenedToUW<Rectangle3d>(0.5)`.
+  /// @tparam Shape `OrientedCuboid` (the default) or `Rectangle3<T>`.
+  /// @param ratio Where the result lies along `v`, as a fraction of it.
+  template <class Shape = OrientedCuboid>
+    requires std::same_as<Shape, OrientedCuboid> ||
+             std::same_as<Shape, Rectangle3<T>>
+  [[nodiscard]]
+  constexpr Shape flattenedToUW(T ratio = 0) const {
+    const Vec3<T> start = corner + v * ratio;
+    if constexpr (std::same_as<Shape, Rectangle3<T>>)
+      return {start, w, u};
+    else
+      return {start, u, Vec3<T>(), w};
+  }
+
+  /// Same as `flattenedToUW(ratio)`, but modifies this box.
+  /// @return A reference to this box.
+  constexpr OrientedCuboid &flattenToUW(T ratio = 0) {
+    return *this = flattenedToUW(ratio);
+  }
+
+  /// Returns the box flattened across `u`: its `v` and `w` edges are kept, and
+  /// its `u` edge collapses onto the plane at `ratio` of the way along it.
+  ///
+  /// `ratio` is measured from `corner` as in `pointAt()`: 0 gives the face
+  /// through `corner`, 1 the opposite face and 0.5 the cross-section through
+  /// `center()`. Values outside [0, 1] give a plane outside the box.
+  ///
+  /// By default the result is a flat `OrientedCuboid` whose `u` is zero. With
+  /// `Shape` set to `Rectangle3<T>` it is a rectangle with sides `v` and `w`,
+  /// so it faces along `v x w`: `c.flattenedToVW<Rectangle3d>(0.5)`.
+  /// @tparam Shape `OrientedCuboid` (the default) or `Rectangle3<T>`.
+  /// @param ratio Where the result lies along `u`, as a fraction of it.
+  template <class Shape = OrientedCuboid>
+    requires std::same_as<Shape, OrientedCuboid> ||
+             std::same_as<Shape, Rectangle3<T>>
+  [[nodiscard]]
+  constexpr Shape flattenedToVW(T ratio = 0) const {
+    const Vec3<T> start = corner + u * ratio;
+    if constexpr (std::same_as<Shape, Rectangle3<T>>)
+      return {start, v, w};
+    else
+      return {start, Vec3<T>(), v, w};
+  }
+
+  /// Same as `flattenedToVW(ratio)`, but modifies this box.
+  /// @return A reference to this box.
+  constexpr OrientedCuboid &flattenToVW(T ratio = 0) {
+    return *this = flattenedToVW(ratio);
+  }
+
+  /// Returns the box rotated by `angle` about the axis through `point` along
+  /// `axis`.
+  ///
+  /// Follows the right-hand rule, like `Vec3::rotatedAroundAxis()`.
+  /// @param axis Must be non-zero; need not be unit length.
+  /// @param angle In radians.
+  [[nodiscard]]
+  OrientedCuboid rotatedAroundPoint(const Vec3<T> &point, const Vec3<T> &axis,
+                                    T angle) const {
+    return {point + (corner - point).rotatedAroundAxis(axis, angle),
+            u.rotatedAroundAxis(axis, angle), v.rotatedAroundAxis(axis, angle),
+            w.rotatedAroundAxis(axis, angle)};
+  }
+
+  /// Same as `rotatedAroundPoint()`, but modifies this box.
+  /// @return A reference to this box.
+  OrientedCuboid &rotateAroundPoint(const Vec3<T> &point, const Vec3<T> &axis,
+                                    T angle) {
+    return *this = rotatedAroundPoint(point, axis, angle);
+  }
+
+  /// Returns the box rotated by `angle` about the axis through its center
+  /// along `axis`; the center stays in place.
+  ///
+  /// Same as `rotatedAroundPoint()` with that point.
+  /// @param axis Must be non-zero; need not be unit length.
+  /// @param angle In radians.
+  [[nodiscard]]
+  OrientedCuboid rotatedAroundCenter(const Vec3<T> &axis, T angle) const {
+    return rotatedAroundPoint(center(), axis, angle);
+  }
+
+  /// Same as `rotatedAroundCenter()`, but modifies this box.
+  /// @return A reference to this box.
+  OrientedCuboid &rotateAroundCenter(const Vec3<T> &axis, T angle) {
+    return *this = rotatedAroundCenter(axis, angle);
+  }
+
+  /// Returns the box scaled by `scalar` about `point`, as if every point `p` of
+  /// it moved to `point + (p - point) * scalar`.
+  ///
+  /// A negative `scalar` also mirrors it through `point`.
+  [[nodiscard]]
+  constexpr OrientedCuboid scaledFromPointBy(const Vec3<T> &point,
+                                             T scalar) const {
+    return {point + (corner - point) * scalar, u * scalar, v * scalar,
+            w * scalar};
+  }
+
+  /// Same as `scaledFromPointBy()`, but modifies this box.
+  /// @return A reference to this box.
+  constexpr OrientedCuboid &scaleFromPointBy(const Vec3<T> &point, T scalar) {
+    return *this = scaledFromPointBy(point, scalar);
+  }
+
+  /// Returns the box scaled by `scalar` about its center, which stays in
+  /// place.
+  ///
+  /// Same as `scaledFromPointBy()` with that point.
+  [[nodiscard]]
+  constexpr OrientedCuboid scaledFromCenterBy(T scalar) const {
+    return scaledFromPointBy(center(), scalar);
+  }
+
+  /// Same as `scaledFromCenterBy()`, but modifies this box.
+  /// @return A reference to this box.
+  constexpr OrientedCuboid &scaleFromCenterBy(T scalar) {
+    return *this = scaledFromCenterBy(scalar);
+  }
+
+  /// Returns the box scaled by `scalar` about `corner`, which stays in place.
+  ///
+  /// Same as `scaledFromPointBy()` with that point.
+  [[nodiscard]]
+  constexpr OrientedCuboid scaledFromCornerBy(T scalar) const {
+    return scaledFromPointBy(corner, scalar);
+  }
+
+  /// Same as `scaledFromCornerBy()`, but modifies this box.
+  /// @return A reference to this box.
+  constexpr OrientedCuboid &scaleFromCornerBy(T scalar) {
+    return *this = scaledFromCornerBy(scalar);
+  }
+
+  /// Returns the box scaled by `scalar` about the origin, as if every point of
+  /// it were multiplied by `scalar`.
+  [[nodiscard]]
+  constexpr OrientedCuboid scaledBy(T scalar) const {
+    return {corner * scalar, u * scalar, v * scalar, w * scalar};
+  }
+
+  /// Same as `scaledBy()`, but modifies this box.
+  /// @return A reference to this box.
+  constexpr OrientedCuboid &scaleBy(T scalar) {
+    return *this = scaledBy(scalar);
+  }
+
+  /// Returns the box with `u` lengthened by `delta.x`, `v` by `delta.y` and
+  /// `w` by `delta.z`, keeping its center and orientation.
+  ///
+  /// A negative delta shrinks it. A zero-length edge stays zero, since it has
+  /// no direction to grow in.
+  [[nodiscard]]
+  OrientedCuboid resizedBy(const Vec3<T> &delta) const {
+    return fromCenterAndSides(center(), u.normalized() * (u.length() + delta.x),
+                              v.normalized() * (v.length() + delta.y),
+                              w.normalized() * (w.length() + delta.z));
+  }
+
+  /// Same as `resizedBy()`, but modifies this box.
+  /// @return A reference to this box.
+  OrientedCuboid &resizeBy(const Vec3<T> &delta) {
+    return *this = resizedBy(delta);
+  }
+
+  /// Returns the box with all three edges grown by `size`, keeping its center
+  /// and orientation.
+  ///
+  /// For example, a 10x10x10 box resized by 2 becomes 12x12x12. A negative
+  /// `size` shrinks it.
+  [[nodiscard]]
+  OrientedCuboid resizedBy(T size) const {
+    return resizedBy(Vec3<T>(size, size, size));
+  }
+
+  /// Same as `resizedBy()`, but modifies this box.
+  /// @return A reference to this box.
+  OrientedCuboid &resizeBy(T size) {
+    return resizeBy(Vec3<T>(size, size, size));
+  }
+
+  /// Returns the box scaled by `scalar` about the origin; see `scaledBy()`.
+  [[nodiscard]]
+  constexpr OrientedCuboid operator*(T scalar) const {
+    return scaledBy(scalar);
+  }
+
+  /// Returns the box scaled by `scalar` about the origin; see `scaledBy()`.
+  friend constexpr OrientedCuboid operator*(T scalar,
+                                            const OrientedCuboid &box) {
+    return box.scaledBy(scalar);
+  }
+
+  /// Same as `scaledBy()`, but modifies this box.
+  /// @return A reference to this box.
+  constexpr OrientedCuboid &operator*=(T scalar) { return scaleBy(scalar); }
+
+  /// Returns the box divided by `scalar` about the origin: the same as scaling
+  /// it by `1 / scalar`.
+  [[nodiscard]]
+  constexpr OrientedCuboid dividedBy(T scalar) const {
+    return {corner / scalar, u / scalar, v / scalar, w / scalar};
+  }
+
+  /// Same as `dividedBy()`, but modifies this box.
+  /// @return A reference to this box.
+  constexpr OrientedCuboid &divideBy(T scalar) {
+    return *this = dividedBy(scalar);
+  }
+
+  /// Returns the box divided by `scalar`; see `dividedBy()`.
+  [[nodiscard]]
+  constexpr OrientedCuboid operator/(T scalar) const {
+    return dividedBy(scalar);
+  }
+
+  /// Same as `dividedBy()`, but modifies this box.
+  /// @return A reference to this box.
+  constexpr OrientedCuboid &operator/=(T scalar) { return divideBy(scalar); }
+
+  /// Returns the point of the box closest to `point`: `point` itself when it
+  /// is inside, otherwise the nearest point on the boundary.
+  [[nodiscard]]
+  constexpr Vec3<T> closestPointTo(const Vec3<T> &point) const {
+    // The edges are orthogonal, so the position along each can be clamped
+    // separately.
+    const auto offset = point - corner;
+    auto along = [&](const Vec3<T> &edge) {
+      const auto lengthSquared = edge.lengthSquared();
+      if (lengthSquared == 0)
+        return Vec3<T>();
+      return edge * std::clamp(offset.dotProductWith(edge) / lengthSquared,
+                               T{0}, T{1});
+    };
+    return corner + along(u) + along(v) + along(w);
+  }
+
+  /// Returns the distance from `point` to the box: 0 when it is inside.
+  [[nodiscard]]
+  T distanceTo(const Vec3<T> &point) const {
+    return closestPointTo(point).distanceTo(point);
+  }
+
+  /// Returns whether `point` lies inside the box or on its surface, within
+  /// `epsilon`.
+  /// @param epsilon The largest distance from it that still counts.
+  [[nodiscard]]
+  bool containsPoint(const Vec3<T> &point,
+                     T epsilon = defaultEpsilon<T>) const {
+    return distanceTo(point) <= epsilon;
+  }
+
+  /// Writes the box as `OrientedCuboid(corner: ..., u: ..., v: ..., w: ...)`.
+  friend std::ostream &operator<<(std::ostream &os, const OrientedCuboid &c) {
+    return os << "OrientedCuboid(corner: " << c.corner << ", u: " << c.u
+              << ", v: " << c.v << ", w: " << c.w << ")";
   }
 };
 
@@ -3868,6 +4292,189 @@ template <std::floating_point T>
   return intersects(rect, circle, epsilon);
 }
 
+namespace detail {
+// An oriented box seen from its own corner with its edges as the axes, where it
+// becomes the axis-aligned cuboid from the origin to its edge lengths. A zero
+// edge gets a direction perpendicular to the others, so a flat box still has
+// an axis across it.
+template <std::floating_point T> struct BoxFrame {
+  Vec3<T> origin;
+  std::array<Vec3<T>, 3> axes;
+  Cuboid<T> box;
+
+  explicit BoxFrame(const OrientedCuboid<T> &c) : origin(c.corner) {
+    const std::array<Vec3<T>, 3> edges{c.u, c.v, c.w};
+    std::array<bool, 3> known;
+    for (std::size_t i = 0; i < 3; i++) {
+      axes[i] = edges[i].normalized();
+      known[i] = edges[i].lengthSquared() != 0;
+    }
+    box = {Vec3<T>(),
+           {edges[0].length(), edges[1].length(), edges[2].length()}};
+    for (std::size_t i = 0; i < 3; i++) {
+      if (known[i])
+        continue;
+      const auto j = (i + 1) % 3, k = (i + 2) % 3;
+      if (known[j] && known[k])
+        axes[i] = axes[j].crossProductWith(axes[k]).normalized();
+      else if (known[j] || known[k])
+        axes[i] = axes[known[j] ? j : k].anyOrthonormal();
+      else
+        axes[i] = Vec3<T>::unitX();
+      known[i] = true;
+    }
+  }
+
+  Vec3<T> toLocal(const Vec3<T> &point) const {
+    return toLocalDirection(point - origin);
+  }
+  Vec3<T> toLocalDirection(const Vec3<T> &direction) const {
+    return {direction.dotProductWith(axes[0]),
+            direction.dotProductWith(axes[1]),
+            direction.dotProductWith(axes[2])};
+  }
+  LineSegment3<T> toLocal(const LineSegment3<T> &segment) const {
+    return {toLocal(segment.start), toLocal(segment.end)};
+  }
+};
+} // namespace detail
+
+// The oriented box tests move the other shape into the box's own frame, where
+// the box is an axis-aligned cuboid, and reuse the cuboid tests.
+
+/// Returns whether the box and the sphere overlap or touch.
+template <std::floating_point T>
+[[nodiscard]] constexpr bool intersects(const OrientedCuboid<T> &box,
+                                        const Sphere<T> &sphere) {
+  return sphere.containsPoint(box.closestPointTo(sphere.center));
+}
+
+/// Returns whether the segment and the box overlap or touch.
+/// @param epsilon How close they must come to count as touching.
+template <std::floating_point T>
+[[nodiscard]] bool intersects(const LineSegment3<T> &segment,
+                              const OrientedCuboid<T> &box,
+                              T epsilon = defaultEpsilon<T>) {
+  const detail::BoxFrame frame(box);
+  return intersects(frame.toLocal(segment), frame.box, epsilon);
+}
+
+/// Returns whether the triangle and the box overlap or touch.
+/// @param epsilon How close they must come to count as touching.
+template <std::floating_point T>
+[[nodiscard]] bool intersects(const Triangle3<T> &triangle,
+                              const OrientedCuboid<T> &box,
+                              T epsilon = defaultEpsilon<T>) {
+  const detail::BoxFrame frame(box);
+  return intersects(Triangle3<T>{frame.toLocal(triangle.a),
+                                 frame.toLocal(triangle.b),
+                                 frame.toLocal(triangle.c)},
+                    frame.box, epsilon);
+}
+
+/// Returns whether the two boxes overlap or touch.
+/// @param epsilon How close they must come to count as touching.
+template <std::floating_point T>
+[[nodiscard]] bool intersects(const OrientedCuboid<T> &a,
+                              const OrientedCuboid<T> &b,
+                              T epsilon = defaultEpsilon<T>) {
+  // Where they meet, an edge of one reaches the other.
+  const detail::BoxFrame frameA(a), frameB(b);
+  for (const auto &edge : a.edges())
+    if (intersects(frameB.toLocal(edge), frameB.box, epsilon))
+      return true;
+  for (const auto &edge : b.edges())
+    if (intersects(frameA.toLocal(edge), frameA.box, epsilon))
+      return true;
+  return false;
+}
+
+/// Returns whether the axis-aligned cuboid and the box overlap or touch.
+/// @param epsilon How close they must come to count as touching.
+template <std::floating_point T>
+[[nodiscard]] bool intersects(const Cuboid<T> &cuboid,
+                              const OrientedCuboid<T> &box,
+                              T epsilon = defaultEpsilon<T>) {
+  return intersects(OrientedCuboid<T>(cuboid), box, epsilon);
+}
+
+/// Returns whether the rectangle and the box overlap or touch.
+/// @param epsilon How close they must come to count as touching.
+template <std::floating_point T>
+[[nodiscard]] bool intersects(const Rectangle3<T> &rect,
+                              const OrientedCuboid<T> &box,
+                              T epsilon = defaultEpsilon<T>) {
+  for (const auto &triangle : rect.triangles())
+    if (intersects(triangle, box, epsilon))
+      return true;
+  return false;
+}
+
+/// Returns whether the disc and the box overlap or touch.
+/// @param epsilon How close they must come to count as touching.
+template <std::floating_point T>
+[[nodiscard]] bool intersects(const Circle3<T> &circle,
+                              const OrientedCuboid<T> &box,
+                              T epsilon = defaultEpsilon<T>) {
+  const detail::BoxFrame frame(box);
+  return intersects(frame.box,
+                    Circle3<T>{frame.toLocal(circle.center), circle.radius,
+                               frame.toLocalDirection(circle.normal)},
+                    epsilon);
+}
+
+/// Returns whether the sphere and the box overlap or touch.
+template <std::floating_point T>
+[[nodiscard]] constexpr bool intersects(const Sphere<T> &sphere,
+                                        const OrientedCuboid<T> &box) {
+  return intersects(box, sphere);
+}
+
+/// Returns whether the box and the segment overlap or touch.
+/// @param epsilon How close they must come to count as touching.
+template <std::floating_point T>
+[[nodiscard]] bool intersects(const OrientedCuboid<T> &box,
+                              const LineSegment3<T> &segment,
+                              T epsilon = defaultEpsilon<T>) {
+  return intersects(segment, box, epsilon);
+}
+
+/// Returns whether the box and the triangle overlap or touch.
+/// @param epsilon How close they must come to count as touching.
+template <std::floating_point T>
+[[nodiscard]] bool intersects(const OrientedCuboid<T> &box,
+                              const Triangle3<T> &triangle,
+                              T epsilon = defaultEpsilon<T>) {
+  return intersects(triangle, box, epsilon);
+}
+
+/// Returns whether the box and the axis-aligned cuboid overlap or touch.
+/// @param epsilon How close they must come to count as touching.
+template <std::floating_point T>
+[[nodiscard]] bool intersects(const OrientedCuboid<T> &box,
+                              const Cuboid<T> &cuboid,
+                              T epsilon = defaultEpsilon<T>) {
+  return intersects(cuboid, box, epsilon);
+}
+
+/// Returns whether the box and the rectangle overlap or touch.
+/// @param epsilon How close they must come to count as touching.
+template <std::floating_point T>
+[[nodiscard]] bool intersects(const OrientedCuboid<T> &box,
+                              const Rectangle3<T> &rect,
+                              T epsilon = defaultEpsilon<T>) {
+  return intersects(rect, box, epsilon);
+}
+
+/// Returns whether the box and the disc overlap or touch.
+/// @param epsilon How close they must come to count as touching.
+template <std::floating_point T>
+[[nodiscard]] bool intersects(const OrientedCuboid<T> &box,
+                              const Circle3<T> &circle,
+                              T epsilon = defaultEpsilon<T>) {
+  return intersects(circle, box, epsilon);
+}
+
 using Circlef = Circle<float>;
 using Circled = Circle<double>;
 using Rectanglef = Rectangle<float>;
@@ -3888,6 +4495,8 @@ using Circle3f = Circle3<float>;
 using Circle3d = Circle3<double>;
 using Rectangle3f = Rectangle3<float>;
 using Rectangle3d = Rectangle3<double>;
+using OrientedCuboidf = OrientedCuboid<float>;
+using OrientedCuboidd = OrientedCuboid<double>;
 } // namespace mathlib
 
 namespace std {
@@ -4131,6 +4740,29 @@ struct formatter<mathlib::Rectangle3<T>> : formatter<mathlib::Vec3<T>> {
     out = std::formatter<mathlib::Vec3<T>>::format(r.u, ctx);
     out = std::format_to(out, ", v: ");
     out = std::formatter<mathlib::Vec3<T>>::format(r.v, ctx);
+    out = std::format_to(out, ")");
+
+    return out;
+  }
+};
+/// Formats an `OrientedCuboid` like its `operator<<`, as
+/// `OrientedCuboid(corner: ..., u: ..., v: ..., w: ...)`.
+///
+/// The format spec applies to each number, so `std::format("{:.2f}", x)` prints
+/// every coordinate with two decimals.
+template <floating_point T>
+struct formatter<mathlib::OrientedCuboid<T>> : formatter<mathlib::Vec3<T>> {
+  auto format(const mathlib::OrientedCuboid<T> &c, format_context &ctx) const {
+    auto out = ctx.out();
+
+    out = std::format_to(out, "OrientedCuboid(corner: ");
+    out = std::formatter<mathlib::Vec3<T>>::format(c.corner, ctx);
+    out = std::format_to(out, ", u: ");
+    out = std::formatter<mathlib::Vec3<T>>::format(c.u, ctx);
+    out = std::format_to(out, ", v: ");
+    out = std::formatter<mathlib::Vec3<T>>::format(c.v, ctx);
+    out = std::format_to(out, ", w: ");
+    out = std::formatter<mathlib::Vec3<T>>::format(c.w, ctx);
     out = std::format_to(out, ")");
 
     return out;
