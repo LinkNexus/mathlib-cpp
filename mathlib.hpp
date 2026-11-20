@@ -1472,6 +1472,102 @@ template <std::floating_point T> struct Rectangle {
     return (min + max) / 2;
   }
 
+  /// Returns the point at the given fraction of the way along each dimension,
+  /// measured from `min`: `{0, 0}` is `min`, `{1, 1}` is `max` and
+  /// `{0.5, 0.5}` is `center()`.
+  ///
+  /// @param ratios The fraction along x and along y. Values outside [0, 1]
+  /// give points outside the rectangle.
+  [[nodiscard]]
+  constexpr Vec2<T> pointAt(const Vec2<T> &ratios) const {
+    return {min.x + (max.x - min.x) * ratios.x,
+            min.y + (max.y - min.y) * ratios.y};
+  }
+
+  /// Returns the rectangle flattened along y onto the line at the given y:
+  /// its x extent is kept, and its height collapses to `y`.
+  ///
+  /// `y` need not be within the rectangle, so the result can be a
+  /// cross-section (at `center().y`, say) or a projection onto any parallel
+  /// line.
+  ///
+  /// By default the result is a flat `Rectangle`. With `Shape` set to
+  /// `LineSegment<T>` it is a segment running towards +x:
+  /// `r.flattenedToX<LineSegmentd>(y)`.
+  /// @tparam Shape `Rectangle` (the default) or `LineSegment<T>`.
+  /// @param y Where the result lies along the y axis.
+  template <class Shape = Rectangle>
+    requires std::same_as<Shape, Rectangle> ||
+             std::same_as<Shape, LineSegment<T>>
+  [[nodiscard]]
+  constexpr Shape flattenedToX(T y) const {
+    return {Vec2<T>(min.x, y), Vec2<T>(max.x, y)};
+  }
+
+  /// Returns the rectangle flattened along y onto `min.y`: same as
+  /// `flattenedToX(min.y)`.
+  ///
+  /// With `Shape` set to `LineSegment<T>` the result is the rectangle's bottom
+  /// edge, running from `min` towards +x: `r.flattenedToX<LineSegmentd>()`.
+  /// @tparam Shape `Rectangle` (the default) or `LineSegment<T>`.
+  template <class Shape = Rectangle>
+    requires std::same_as<Shape, Rectangle> ||
+             std::same_as<Shape, LineSegment<T>>
+  [[nodiscard]]
+  constexpr Shape flattenedToX() const {
+    return flattenedToX<Shape>(min.y);
+  }
+
+  /// Same as `flattenedToX(y)`, but modifies this rectangle.
+  /// @return A reference to this rectangle.
+  constexpr Rectangle &flattenToX(T y) { return *this = flattenedToX(y); }
+
+  /// Same as `flattenedToX()`, but modifies this rectangle.
+  /// @return A reference to this rectangle.
+  constexpr Rectangle &flattenToX() { return *this = flattenedToX(); }
+
+  /// Returns the rectangle flattened along x onto the line at the given x:
+  /// its y extent is kept, and its width collapses to `x`.
+  ///
+  /// `x` need not be within the rectangle, so the result can be a
+  /// cross-section (at `center().x`, say) or a projection onto any parallel
+  /// line.
+  ///
+  /// By default the result is a flat `Rectangle`. With `Shape` set to
+  /// `LineSegment<T>` it is a segment running towards +y:
+  /// `r.flattenedToY<LineSegmentd>(x)`.
+  /// @tparam Shape `Rectangle` (the default) or `LineSegment<T>`.
+  /// @param x Where the result lies along the x axis.
+  template <class Shape = Rectangle>
+    requires std::same_as<Shape, Rectangle> ||
+             std::same_as<Shape, LineSegment<T>>
+  [[nodiscard]]
+  constexpr Shape flattenedToY(T x) const {
+    return {Vec2<T>(x, min.y), Vec2<T>(x, max.y)};
+  }
+
+  /// Returns the rectangle flattened along x onto `min.x`: same as
+  /// `flattenedToY(min.x)`.
+  ///
+  /// With `Shape` set to `LineSegment<T>` the result is the rectangle's left
+  /// edge, running from `min` towards +y: `r.flattenedToY<LineSegmentd>()`.
+  /// @tparam Shape `Rectangle` (the default) or `LineSegment<T>`.
+  template <class Shape = Rectangle>
+    requires std::same_as<Shape, Rectangle> ||
+             std::same_as<Shape, LineSegment<T>>
+  [[nodiscard]]
+  constexpr Shape flattenedToY() const {
+    return flattenedToY<Shape>(min.x);
+  }
+
+  /// Same as `flattenedToY(x)`, but modifies this rectangle.
+  /// @return A reference to this rectangle.
+  constexpr Rectangle &flattenToY(T x) { return *this = flattenedToY(x); }
+
+  /// Same as `flattenedToY()`, but modifies this rectangle.
+  /// @return A reference to this rectangle.
+  constexpr Rectangle &flattenToY() { return *this = flattenedToY(); }
+
   /// Returns the rectangle scaled by `scalar` about `point`, as if every point
   /// `p` of it moved to `point + (p - point) * scalar`.
   ///
@@ -2505,6 +2601,17 @@ template <std::floating_point T> struct Rectangle3 {
     return corner + (u + v) / 2;
   }
 
+  /// Returns the point at the given fraction of the way along each side,
+  /// measured from `corner`: `{0, 0}` is `corner`, `{1, 1}` is the opposite
+  /// corner and `{0.5, 0.5}` is `center()`.
+  ///
+  /// @param ratios The fraction along `u` and along `v`. Values outside
+  /// [0, 1] give points outside the rectangle, in its plane.
+  [[nodiscard]]
+  constexpr Vec3<T> pointAt(const Vec2<T> &ratios) const {
+    return corner + u * ratios.x + v * ratios.y;
+  }
+
   /// Returns the unit normal, along `u x v`.
   ///
   /// Returns the zero vector for a degenerate rectangle.
@@ -2786,34 +2893,149 @@ template <std::floating_point T> struct Cuboid {
     return (min + max) / 2;
   }
 
-  /// Returns the cuboid flattened along z: its z extent collapses onto `min.z`,
-  /// while its x and y extents are kept.
+  /// Returns the point at the given fraction of the way along each dimension,
+  /// measured from `min`: `{0, 0, 0}` is `min`, `{1, 1, 1}` is `max` and
+  /// `{0.5, 0.5, 0.5}` is `center()`.
+  ///
+  /// For example, `pointAt({0.5, 0, 0.1})` is halfway along x, at the
+  /// bottom in y and 10% of the way along z.
+  ///
+  /// @param ratios The fraction along x, y and z. Values outside [0, 1] give
+  /// points outside the cuboid.
   [[nodiscard]]
-  constexpr Cuboid flattenedToXY() const {
-    return fromMinAndSize(min, max.x - min.x, max.y - min.y, 0);
+  constexpr Vec3<T> pointAt(const Vec3<T> &ratios) const {
+    return {min.x + (max.x - min.x) * ratios.x,
+            min.y + (max.y - min.y) * ratios.y,
+            min.z + (max.z - min.z) * ratios.z};
   }
+
+  /// Returns the cuboid flattened along z onto the plane at the given z:
+  /// its x and y extents are kept, and its z extent collapses to `z`.
+  ///
+  /// `z` need not be within the cuboid, so the result can be a cross-section
+  /// (at `center().z`, say) or a projection onto any parallel plane.
+  ///
+  /// By default the result is a flat `Cuboid`. With `Shape` set to
+  /// `Rectangle3<T>` it is a rectangle with `u` along +x and `v` along +y, so
+  /// it faces +z: `c.flattenedToXY<Rectangle3d>(z)`.
+  /// @tparam Shape `Cuboid` (the default) or `Rectangle3<T>`.
+  /// @param z Where the result lies along the z axis.
+  template <class Shape = Cuboid>
+    requires std::same_as<Shape, Cuboid> || std::same_as<Shape, Rectangle3<T>>
+  [[nodiscard]]
+  constexpr Shape flattenedToXY(T z) const {
+    const Vec3<T> corner(min.x, min.y, z);
+    if constexpr (std::same_as<Shape, Rectangle3<T>>)
+      return {corner, Vec3<T>(max.x - min.x, 0, 0),
+              Vec3<T>(0, max.y - min.y, 0)};
+    else
+      return {corner, Vec3<T>(max.x, max.y, z)};
+  }
+
+  /// Returns the cuboid flattened along z onto `min.z`: same as
+  /// `flattenedToXY(min.z)`.
+  ///
+  /// With `Shape` set to `Rectangle3<T>` the result is the cuboid's bottom
+  /// (`min.z`) face, facing +z: `c.flattenedToXY<Rectangle3d>()`.
+  /// @tparam Shape `Cuboid` (the default) or `Rectangle3<T>`.
+  template <class Shape = Cuboid>
+    requires std::same_as<Shape, Cuboid> || std::same_as<Shape, Rectangle3<T>>
+  [[nodiscard]]
+  constexpr Shape flattenedToXY() const {
+    return flattenedToXY<Shape>(min.z);
+  }
+
+  /// Same as `flattenedToXY(z)`, but modifies this cuboid.
+  /// @return A reference to this cuboid.
+  constexpr Cuboid &flattenToXY(T z) { return *this = flattenedToXY(z); }
 
   /// Same as `flattenedToXY()`, but modifies this cuboid.
   /// @return A reference to this cuboid.
   constexpr Cuboid &flattenToXY() { return *this = flattenedToXY(); }
 
-  /// Returns the cuboid flattened along y: its y extent collapses onto `min.y`,
-  /// while its x and z extents are kept.
+  /// Returns the cuboid flattened along y onto the plane at the given y:
+  /// its x and z extents are kept, and its y extent collapses to `y`.
+  ///
+  /// `y` need not be within the cuboid, so the result can be a cross-section
+  /// (at `center().y`, say) or a projection onto any parallel plane.
+  ///
+  /// By default the result is a flat `Cuboid`. With `Shape` set to
+  /// `Rectangle3<T>` it is a rectangle with `u` along +z and `v` along +x, so
+  /// it faces +y: `c.flattenedToXZ<Rectangle3d>(y)`.
+  /// @tparam Shape `Cuboid` (the default) or `Rectangle3<T>`.
+  /// @param y Where the result lies along the y axis.
+  template <class Shape = Cuboid>
+    requires std::same_as<Shape, Cuboid> || std::same_as<Shape, Rectangle3<T>>
   [[nodiscard]]
-  constexpr Cuboid flattenedToXZ() const {
-    return fromMinAndSize(min, max.x - min.x, 0, max.z - min.z);
+  constexpr Shape flattenedToXZ(T y) const {
+    const Vec3<T> corner(min.x, y, min.z);
+    if constexpr (std::same_as<Shape, Rectangle3<T>>)
+      return {corner, Vec3<T>(0, 0, max.z - min.z),
+              Vec3<T>(max.x - min.x, 0, 0)};
+    else
+      return {corner, Vec3<T>(max.x, y, max.z)};
   }
+
+  /// Returns the cuboid flattened along y onto `min.y`: same as
+  /// `flattenedToXZ(min.y)`.
+  ///
+  /// With `Shape` set to `Rectangle3<T>` the result is the cuboid's `min.y`
+  /// face, facing +y: `c.flattenedToXZ<Rectangle3d>()`.
+  /// @tparam Shape `Cuboid` (the default) or `Rectangle3<T>`.
+  template <class Shape = Cuboid>
+    requires std::same_as<Shape, Cuboid> || std::same_as<Shape, Rectangle3<T>>
+  [[nodiscard]]
+  constexpr Shape flattenedToXZ() const {
+    return flattenedToXZ<Shape>(min.y);
+  }
+
+  /// Same as `flattenedToXZ(y)`, but modifies this cuboid.
+  /// @return A reference to this cuboid.
+  constexpr Cuboid &flattenToXZ(T y) { return *this = flattenedToXZ(y); }
 
   /// Same as `flattenedToXZ()`, but modifies this cuboid.
   /// @return A reference to this cuboid.
   constexpr Cuboid &flattenToXZ() { return *this = flattenedToXZ(); }
 
-  /// Returns the cuboid flattened along x: its x extent collapses onto `min.x`,
-  /// while its y and z extents are kept.
+  /// Returns the cuboid flattened along x onto the plane at the given x:
+  /// its y and z extents are kept, and its x extent collapses to `x`.
+  ///
+  /// `x` need not be within the cuboid, so the result can be a cross-section
+  /// (at `center().x`, say) or a projection onto any parallel plane.
+  ///
+  /// By default the result is a flat `Cuboid`. With `Shape` set to
+  /// `Rectangle3<T>` it is a rectangle with `u` along +y and `v` along +z, so
+  /// it faces +x: `c.flattenedToYZ<Rectangle3d>(x)`.
+  /// @tparam Shape `Cuboid` (the default) or `Rectangle3<T>`.
+  /// @param x Where the result lies along the x axis.
+  template <class Shape = Cuboid>
+    requires std::same_as<Shape, Cuboid> || std::same_as<Shape, Rectangle3<T>>
   [[nodiscard]]
-  constexpr Cuboid flattenedToYZ() const {
-    return fromMinAndSize(min, 0, max.y - min.y, max.z - min.z);
+  constexpr Shape flattenedToYZ(T x) const {
+    const Vec3<T> corner(x, min.y, min.z);
+    if constexpr (std::same_as<Shape, Rectangle3<T>>)
+      return {corner, Vec3<T>(0, max.y - min.y, 0),
+              Vec3<T>(0, 0, max.z - min.z)};
+    else
+      return {corner, Vec3<T>(x, max.y, max.z)};
   }
+
+  /// Returns the cuboid flattened along x onto `min.x`: same as
+  /// `flattenedToYZ(min.x)`.
+  ///
+  /// With `Shape` set to `Rectangle3<T>` the result is the cuboid's `min.x`
+  /// face, facing +x: `c.flattenedToYZ<Rectangle3d>()`.
+  /// @tparam Shape `Cuboid` (the default) or `Rectangle3<T>`.
+  template <class Shape = Cuboid>
+    requires std::same_as<Shape, Cuboid> || std::same_as<Shape, Rectangle3<T>>
+  [[nodiscard]]
+  constexpr Shape flattenedToYZ() const {
+    return flattenedToYZ<Shape>(min.x);
+  }
+
+  /// Same as `flattenedToYZ(x)`, but modifies this cuboid.
+  /// @return A reference to this cuboid.
+  constexpr Cuboid &flattenToYZ(T x) { return *this = flattenedToYZ(x); }
 
   /// Same as `flattenedToYZ()`, but modifies this cuboid.
   /// @return A reference to this cuboid.

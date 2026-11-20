@@ -1803,6 +1803,40 @@ template <class T> void test_shape_resizing() {
               "Cuboid resizeBy in place");
 }
 
+template <class T> void test_point_at() {
+  TEST_SUITE("Shape pointAt");
+  using V2 = mathlib::Vec2<T>;
+  using V3 = mathlib::Vec3<T>;
+
+  const mathlib::Cuboid<T> b{{1, 2, 3}, {11, 12, 13}};
+  TEST_ASSERT(near(b.pointAt({0, 0, 0}), b.min) &&
+                  near(b.pointAt({1, 1, 1}), b.max),
+              "Cuboid pointAt at 0 and 1 gives min and max");
+  TEST_ASSERT(near(b.pointAt({0.5, 0.5, 0.5}), b.center()),
+              "Cuboid pointAt halfway gives center");
+  TEST_ASSERT(near(b.pointAt({0.5, 0, 0.1}), V3(6, 2, 4)),
+              "Cuboid pointAt mixes ratios per axis");
+  TEST_ASSERT(near(b.pointAt({-0.5, 2, 0}), V3(-4, 22, 3)),
+              "Cuboid pointAt outside [0, 1] leaves the cuboid");
+
+  const mathlib::Rectangle<T> r{{1, 2}, {5, 10}};
+  TEST_ASSERT(near(r.pointAt({0, 0}), r.min) && near(r.pointAt({1, 1}), r.max),
+              "Rectangle pointAt at 0 and 1 gives min and max");
+  TEST_ASSERT(near(r.pointAt({0.5, 0.5}), r.center()),
+              "Rectangle pointAt halfway gives center");
+  TEST_ASSERT(near(r.pointAt({0.25, 0.75}), V2(2, 8)),
+              "Rectangle pointAt mixes ratios per axis");
+
+  const mathlib::Rectangle3<T> r3{{1, 1, 1}, {4, 0, 0}, {0, 0, 2}};
+  TEST_ASSERT(near(r3.pointAt({0, 0}), r3.corner) &&
+                  near(r3.pointAt({1, 1}), V3(5, 1, 3)),
+              "Rectangle3 pointAt at 0 and 1 gives opposite corners");
+  TEST_ASSERT(near(r3.pointAt({0.5, 0.5}), r3.center()),
+              "Rectangle3 pointAt halfway gives center");
+  TEST_ASSERT(near(r3.pointAt({0.25, 0.5}), V3(2, 1, 2)),
+              "Rectangle3 pointAt follows u and v");
+}
+
 template <class T> void test_cuboid_flattening() {
   TEST_SUITE("Cuboid flattening");
   using B = mathlib::Cuboid<T>;
@@ -1824,6 +1858,115 @@ template <class T> void test_cuboid_flattening() {
   TEST_ASSERT(&m.flattenToXZ() == &m && near(m.max, xz.max), "flattenToXZ");
   m = b;
   TEST_ASSERT(&m.flattenToYZ() == &m && near(m.max, yz.max), "flattenToYZ");
+
+  using R3 = mathlib::Rectangle3<T>;
+  static_assert(std::is_same_v<decltype(b.flattenedToXY()), B>);
+  const R3 xyFace = b.template flattenedToXY<R3>();
+  TEST_ASSERT(near(xyFace.corner, {1, 2, 3}) && near(xyFace.u, {3, 0, 0}) &&
+                  near(xyFace.v, {0, 4, 0}) && near(xyFace.normal(), {0, 0, 1}),
+              "flattenedToXY<Rectangle3> is the bottom face, facing +z");
+  const R3 xzFace = b.template flattenedToXZ<R3>();
+  TEST_ASSERT(near(xzFace.corner, {1, 2, 3}) && near(xzFace.u, {0, 0, 5}) &&
+                  near(xzFace.v, {3, 0, 0}) && near(xzFace.normal(), {0, 1, 0}),
+              "flattenedToXZ<Rectangle3> is the min.y face, facing +y");
+  const R3 yzFace = b.template flattenedToYZ<R3>();
+  TEST_ASSERT(near(yzFace.corner, {1, 2, 3}) && near(yzFace.u, {0, 4, 0}) &&
+                  near(yzFace.v, {0, 0, 5}) && near(yzFace.normal(), {1, 0, 0}),
+              "flattenedToYZ<Rectangle3> is the min.x face, facing +x");
+  TEST_ASSERT(near(xyFace.area(), T(12)) && near(xzFace.area(), T(15)) &&
+                  near(yzFace.area(), T(20)),
+              "face areas match the cuboid's extents");
+
+  const auto middle = b.flattenedToXY(b.center().z);
+  TEST_ASSERT(near(middle.min, {1, 2, T(5.5)}) &&
+                  near(middle.max, {4, 6, T(5.5)}),
+              "flattenedToXY(z) gives a cross-section through the middle");
+  const auto projected = b.flattenedToXZ(-10);
+  TEST_ASSERT(near(projected.min, {1, -10, 3}) &&
+                  near(projected.max, {4, -10, 8}),
+              "flattenedToXZ(y) can lie outside the cuboid");
+  const auto yzAt = b.flattenedToYZ(2);
+  TEST_ASSERT(near(yzAt.min, {2, 2, 3}) && near(yzAt.max, {2, 6, 8}),
+              "flattenedToYZ(x)");
+  TEST_ASSERT(near(b.flattenedToXY(b.min.z).max, xy.max),
+              "flattenedToXY() is flattenedToXY(min.z)");
+
+  const R3 slice = b.template flattenedToXY<R3>(0);
+  TEST_ASSERT(near(slice.corner, {1, 2, 0}) && near(slice.u, xyFace.u) &&
+                  near(slice.v, xyFace.v),
+              "flattenedToXY<Rectangle3>(z) is the face moved to z");
+  const R3 xzSlice = b.template flattenedToXZ<R3>(4);
+  TEST_ASSERT(near(xzSlice.corner, {1, 4, 3}) && near(xzSlice.u, xzFace.u) &&
+                  near(xzSlice.normal(), {0, 1, 0}),
+              "flattenedToXZ<Rectangle3>(y)");
+  const R3 yzSlice = b.template flattenedToYZ<R3>(3);
+  TEST_ASSERT(near(yzSlice.corner, {3, 2, 3}) && near(yzSlice.v, yzFace.v) &&
+                  near(yzSlice.normal(), {1, 0, 0}),
+              "flattenedToYZ<Rectangle3>(x)");
+
+  m = b;
+  TEST_ASSERT(&m.flattenToXY(7) == &m && near(m.min, {1, 2, 7}) &&
+                  near(m.max, {4, 6, 7}),
+              "flattenToXY(z)");
+  m = b;
+  TEST_ASSERT(&m.flattenToXZ(0) == &m && near(m.min, {1, 0, 3}) &&
+                  near(m.max, {4, 0, 8}),
+              "flattenToXZ(y)");
+  m = b;
+  TEST_ASSERT(&m.flattenToYZ(0) == &m && near(m.min, {0, 2, 3}) &&
+                  near(m.max, {0, 6, 8}),
+              "flattenToYZ(x)");
+}
+
+template <class T> void test_rectangle_flattening() {
+  TEST_SUITE("Rectangle flattening");
+  using R = mathlib::Rectangle<T>;
+  using L = mathlib::LineSegment<T>;
+  const R r{{1, 2}, {4, 6}};
+
+  static_assert(std::is_same_v<decltype(r.flattenedToX()), R>);
+  const auto x = r.flattenedToX();
+  TEST_ASSERT(near(x.min, {1, 2}) && near(x.max, {4, 2}),
+              "flattenedToX collapses y onto min.y");
+  const auto y = r.flattenedToY();
+  TEST_ASSERT(near(y.min, {1, 2}) && near(y.max, {1, 6}),
+              "flattenedToY collapses x onto min.x");
+
+  auto m = r;
+  TEST_ASSERT(&m.flattenToX() == &m && near(m.min, x.min) && near(m.max, x.max),
+              "flattenToX");
+  m = r;
+  TEST_ASSERT(&m.flattenToY() == &m && near(m.min, y.min) && near(m.max, y.max),
+              "flattenToY");
+
+  const L bottom = r.template flattenedToX<L>();
+  TEST_ASSERT(near(bottom.start, {1, 2}) && near(bottom.end, {4, 2}),
+              "flattenedToX<LineSegment> is the bottom edge");
+  const L left = r.template flattenedToY<L>();
+  TEST_ASSERT(near(left.start, {1, 2}) && near(left.end, {1, 6}),
+              "flattenedToY<LineSegment> is the left edge");
+
+  const auto across = r.flattenedToX(r.center().y);
+  TEST_ASSERT(near(across.min, {1, 4}) && near(across.max, {4, 4}),
+              "flattenedToX(y) gives a cross-section through the middle");
+  const auto outside = r.flattenedToY(-3);
+  TEST_ASSERT(near(outside.min, {-3, 2}) && near(outside.max, {-3, 6}),
+              "flattenedToY(x) can lie outside the rectangle");
+  const L chord = r.template flattenedToX<L>(5);
+  TEST_ASSERT(near(chord.start, {1, 5}) && near(chord.end, {4, 5}),
+              "flattenedToX<LineSegment>(y)");
+  const L vertical = r.template flattenedToY<L>(2);
+  TEST_ASSERT(near(vertical.start, {2, 2}) && near(vertical.end, {2, 6}),
+              "flattenedToY<LineSegment>(x)");
+
+  m = r;
+  TEST_ASSERT(&m.flattenToX(0) == &m && near(m.min, {1, 0}) &&
+                  near(m.max, {4, 0}),
+              "flattenToX(y)");
+  m = r;
+  TEST_ASSERT(&m.flattenToY(3) == &m && near(m.min, {3, 2}) &&
+                  near(m.max, {3, 6}),
+              "flattenToY(x)");
 }
 
 template <class T> void test_rectangle3() {
@@ -2016,7 +2159,9 @@ template <class T> void run_all(const char *type) {
   test_circle3<T>();
   test_rectangle3<T>();
   test_shape_resizing<T>();
+  test_point_at<T>();
   test_cuboid_flattening<T>();
+  test_rectangle_flattening<T>();
   test_lifting_to_3d<T>();
   test_intersects3d_symmetry<T>();
   test_shapes3d_factories<T>();
