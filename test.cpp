@@ -2064,6 +2064,245 @@ template <class T> void test_oriented_cuboid() {
               "format and operator<<");
 }
 
+template <class T> void test_contains2d() {
+  TEST_SUITE("contains (2D)");
+  using C = mathlib::Circle<T>;
+  using R = mathlib::Rectangle<T>;
+  using S = mathlib::LineSegment<T>;
+  using Tr = mathlib::Triangle<T>;
+  using mathlib::contains;
+
+  TEST_ASSERT(contains(C{{0, 0}, 5}, C{{1, 0}, 3}) &&
+                  !contains(C{{0, 0}, 5}, C{{3, 0}, 3}),
+              "circle in circle");
+  TEST_ASSERT(!contains(C{{1, 0}, 3}, C{{0, 0}, 5}), "order matters");
+  const R square{{0, 0}, {10, 10}};
+  TEST_ASSERT(contains(square, C{{5, 5}, 5}) &&
+                  !contains(square, C{{5, 5}, 5.1}) &&
+                  !contains(square, C{{1, 5}, 2}),
+              "circle in rectangle, touching counts");
+  const Tr tri{{0, 0}, {10, 0}, {0, 10}};
+  TEST_ASSERT(contains(tri, C{{2, 2}, 1}) && !contains(tri, C{{2, 2}, 2.5}) &&
+                  !contains(tri, C{{20, 2}, 1}),
+              "circle in triangle");
+  TEST_ASSERT(contains(S{{0, 0}, {4, 0}}, C{{1, 0}, 0}) &&
+                  !contains(S{{0, 0}, {4, 0}}, C{{1, 0}, 1}),
+              "only a point-sized circle fits in a segment");
+  TEST_ASSERT(contains(C{{0, 0}, 5}, R{{-3, -3}, {3, 3}}) &&
+                  !contains(C{{0, 0}, 4}, R{{-3, -3}, {3, 3}}),
+              "rectangle in circle");
+  TEST_ASSERT(contains(tri, R{{1, 1}, {3, 3}}) &&
+                  !contains(tri, R{{1, 1}, {6, 6}}),
+              "rectangle in triangle");
+  TEST_ASSERT(contains(square, Tr{{1, 1}, {9, 1}, {5, 9}}) &&
+                  !contains(square, Tr{{1, 1}, {11, 1}, {5, 9}}),
+              "triangle in rectangle");
+  TEST_ASSERT(contains(square, R{{0, 0}, {10, 5}}) &&
+                  !contains(R{{0, 0}, {10, 5}}, square),
+              "rectangle in rectangle");
+  TEST_ASSERT(contains(S{{0, 0}, {4, 0}}, S{{1, 0}, {3, 0}}) &&
+                  !contains(S{{0, 0}, {4, 0}}, S{{1, 0}, {5, 0}}) &&
+                  !contains(S{{0, 0}, {4, 0}}, S{{1, 1}, {3, 1}}),
+              "segment in segment");
+  TEST_ASSERT(contains(square, S{{1, 1}, {9, 9}}) &&
+                  !contains(square, S{{1, 1}, {11, 9}}),
+              "segment in rectangle");
+
+  const C circles[] = {{{0, 0}, 5}, {{2, 1}, T(0.5)}};
+  const R rects[] = {square, {{-1, -2}, {3, 1}}};
+  const S segments[] = {{{0, 0}, {4, 3}}, {{-2, 5}, {6, -1}}};
+  const Tr tris[] = {tri, {{-1, -1}, {2, 0}, {0, 3}}};
+  bool reflexive = true, implies = true, farAway = true;
+  const mathlib::Vec2<T> far(100, 100);
+  auto check = [&](const auto &outers, const auto &inners, bool same) {
+    for (const auto &a : outers)
+      for (const auto &b : inners) {
+        if (contains(a, b))
+          implies &= intersects(a, b);
+        auto moved = b;
+        if constexpr (requires { moved.center; })
+          moved.center += far;
+        else if constexpr (requires { moved.min; })
+          moved.min += far, moved.max += far;
+        else if constexpr (requires { moved.start; })
+          moved.start += far, moved.end += far;
+        else
+          moved.a += far, moved.b += far, moved.c += far;
+        farAway &= !contains(a, moved);
+      }
+    if (same)
+      for (const auto &a : outers)
+        reflexive &= contains(a, a);
+  };
+  auto all = [&](const auto &outers) {
+    check(outers, circles, false);
+    check(outers, rects, false);
+    check(outers, segments, false);
+    check(outers, tris, false);
+  };
+  all(circles);
+  all(rects);
+  all(segments);
+  all(tris);
+  check(circles, circles, true);
+  check(rects, rects, true);
+  check(segments, segments, true);
+  check(tris, tris, true);
+  TEST_ASSERT(reflexive, "every shape contains itself");
+  TEST_ASSERT(implies, "contains(a, b) implies intersects(a, b)");
+  TEST_ASSERT(farAway, "nothing contains a shape far away from it");
+}
+
+template <class T> void test_contains3d() {
+  TEST_SUITE("contains (3D)");
+  using Sp = mathlib::Sphere<T>;
+  using B = mathlib::Cuboid<T>;
+  using O = mathlib::OrientedCuboid<T>;
+  using S = mathlib::LineSegment3<T>;
+  using Tr = mathlib::Triangle3<T>;
+  using D = mathlib::Circle3<T>;
+  using R = mathlib::Rectangle3<T>;
+  using V3 = Vec3<T>;
+  using mathlib::contains;
+  constexpr T pi = std::numbers::pi_v<T>;
+
+  TEST_ASSERT(contains(Sp{{0, 0, 0}, 5}, Sp{{1, 0, 0}, 3}) &&
+                  !contains(Sp{{0, 0, 0}, 5}, Sp{{3, 0, 0}, 3}) &&
+                  !contains(Sp{{1, 0, 0}, 3}, Sp{{0, 0, 0}, 5}),
+              "sphere in sphere");
+  const B box10{{0, 0, 0}, {10, 10, 10}};
+  TEST_ASSERT(contains(box10, Sp{{5, 5, 5}, 5}) &&
+                  !contains(box10, Sp{{5, 5, 5}, 5.1}),
+              "sphere in cuboid, touching counts");
+
+  // A cube of side 2 at the origin turned 45 degrees about z.
+  const O cube =
+      O(B{{-1, -1, -1}, {1, 1, 1}}).rotatedAroundCenter(V3::unitZ(), pi / 4);
+  TEST_ASSERT(contains(cube, Sp{{0, 0, 0}, 1}) &&
+                  !contains(cube, Sp{{0, 0, 0}, 1.1}),
+              "sphere in box");
+  TEST_ASSERT(contains(cube, B{{-0.7, -0.7, -0.7}, {0.7, 0.7, 0.7}}) &&
+                  !contains(cube, B{{-0.8, -0.8, -0.8}, {0.8, 0.8, 0.8}}),
+              "cuboid in box");
+  TEST_ASSERT(!contains(B{{-1, -1, -1}, {1, 1, 1}}, cube) &&
+                  contains(cube.boundingBox(), cube),
+              "box in cuboid");
+  TEST_ASSERT(contains(Sp{{0, 0, 0}, 1.8}, cube) &&
+                  !contains(Sp{{0, 0, 0}, 1.7}, cube),
+              "box in sphere");
+  TEST_ASSERT(
+      contains(cube, cube.scaledFromCenterBy(T(0.5)).rotatedAroundCenter(
+                         V3(1, 2, 3), 1)) &&
+          !contains(cube.scaledFromCenterBy(T(0.5)), cube),
+      "box in box");
+
+  TEST_ASSERT(contains(Sp{{0, 0, 0}, 5}, D{{0, 0, 3}, 4}) &&
+                  !contains(Sp{{0, 0, 0}, 5}, D{{0, 0, 3}, 4.1}),
+              "disc in sphere");
+  TEST_ASSERT(contains(Sp{{0, 0, 0}, 5}, D{{0, 0, 3}, 2, V3::unitX()}) &&
+                  !contains(Sp{{0, 0, 0}, 5}, D{{0, 0, 3}, 2.1, V3::unitX()}),
+              "tilted disc in sphere");
+  TEST_ASSERT(contains(box10, D{{5, 5, 5}, 5}) &&
+                  contains(box10, D{{5, 5, 5}, 5, {1, 0, 1}}) &&
+                  !contains(box10, D{{5, 5, 5}, 5.1, {1, 0, 1}}) &&
+                  !contains(box10, D{{5, 5, 1}, 2, {1, 0, 1}}),
+              "disc in cuboid");
+  TEST_ASSERT(contains(cube, D{{0, 0, 0}, 1}) &&
+                  !contains(cube, D{{0, 0, 0}, 1.1}),
+              "disc in box");
+  const Tr flatTri{{0, 0, 0}, {10, 0, 0}, {0, 10, 0}};
+  TEST_ASSERT(contains(flatTri, D{{2, 2, 0}, 1}) &&
+                  !contains(flatTri, D{{2, 2, 0}, 1, V3::unitX()}) &&
+                  !contains(flatTri, D{{2, 2, 0.5}, 1}) &&
+                  !contains(flatTri, D{{2, 2, 0}, 2.5}),
+              "disc in triangle: same plane and inside");
+  const R flatRect{{0, 0, 0}, {10, 0, 0}, {0, 10, 0}};
+  TEST_ASSERT(contains(flatRect, D{{5, 5, 0}, 5}) &&
+                  contains(flatRect, D{{5, 5, 0}, 5, -V3::unitZ()}) &&
+                  !contains(flatRect, D{{5, 5, 0}, 5.1}),
+              "disc in rectangle");
+  TEST_ASSERT(contains(D{{0, 0, 0}, 5}, D{{1, 0, 0}, 3}) &&
+                  !contains(D{{0, 0, 0}, 5}, D{{1, 0, 0}, 3, V3::unitX()}) &&
+                  !contains(D{{0, 0, 0}, 5}, D{{1, 0, 1}, 3}),
+              "disc in disc");
+  TEST_ASSERT(contains(flatRect, Sp{{5, 5, 0}, 0}) &&
+                  !contains(flatRect, Sp{{5, 5, 0}, 1}),
+              "only a point-sized sphere fits in a flat shape");
+  TEST_ASSERT(contains(S{{0, 0, 0}, {4, 0, 0}}, D{{1, 0, 0}, 0}) &&
+                  !contains(S{{0, 0, 0}, {4, 0, 0}}, D{{1, 0, 0}, 1}),
+              "only a point-sized disc fits in a segment");
+  TEST_ASSERT(contains(flatRect, S{{1, 1, 0}, {9, 9, 0}}) &&
+                  !contains(flatRect, S{{1, 1, 0}, {9, 9, 1}}),
+              "segment in rectangle");
+  TEST_ASSERT(contains(D{{0, 0, 0}, 5}, S{{-3, 0, 0}, {3, 0, 0}}) &&
+                  !contains(D{{0, 0, 0}, 5}, S{{-6, 0, 0}, {3, 0, 0}}),
+              "segment in disc");
+  TEST_ASSERT(contains(box10, Tr{{1, 1, 1}, {9, 1, 1}, {5, 9, 9}}) &&
+                  !contains(box10, Tr{{1, 1, 1}, {9, 1, 1}, {5, 9, 11}}),
+              "triangle in cuboid");
+  TEST_ASSERT(contains(flatTri, R{{1, 1, 0}, {2, 0, 0}, {0, 2, 0}}) &&
+                  !contains(flatTri, R{{1, 1, 0}, {6, 0, 0}, {0, 6, 0}}),
+              "rectangle in triangle");
+
+  const Sp spheres[] = {{{0, 0, 0}, 5}, {{1, 1, 0}, T(0.5)}};
+  const B cuboids[] = {box10, {{-1, -2, -1}, {3, 1, 2}}};
+  const O boxes[] = {cube, O(cuboids[1]).rotatedAroundCenter(V3(1, 2, 3), 1)};
+  const S segments[] = {{{0, 0, 0}, {4, 3, 1}}, {{-2, 5, 1}, {6, -1, 0}}};
+  const Tr tris[] = {flatTri, {{-1, -1, 0}, {2, 0, 1}, {0, 3, -1}}};
+  const D discs[] = {{{0, 0, 0}, 5}, {{1, 1, 0}, 2, {1, 2, 3}}};
+  const R rects[] = {flatRect, {{-1, 0, 0}, {0, 2, 2}, {3, 0, 0}}};
+  bool reflexive = true, implies = true, farAway = true;
+  const V3 far(100, 100, 100);
+  auto check = [&](const auto &outers, const auto &inners, bool same) {
+    for (const auto &a : outers)
+      for (const auto &b : inners) {
+        if (contains(a, b))
+          implies &= intersects(a, b);
+        auto moved = b;
+        if constexpr (requires { moved.center; })
+          moved.center += far;
+        else if constexpr (requires { moved.min; })
+          moved.min += far, moved.max += far;
+        else if constexpr (requires { moved.corner; })
+          moved.corner += far;
+        else if constexpr (requires { moved.start; })
+          moved.start += far, moved.end += far;
+        else
+          moved.a += far, moved.b += far, moved.c += far;
+        farAway &= !contains(a, moved);
+      }
+    if (same)
+      for (const auto &a : outers)
+        reflexive &= contains(a, a);
+  };
+  auto all = [&](const auto &outers) {
+    check(outers, spheres, false);
+    check(outers, cuboids, false);
+    check(outers, boxes, false);
+    check(outers, segments, false);
+    check(outers, tris, false);
+    check(outers, discs, false);
+    check(outers, rects, false);
+  };
+  all(spheres);
+  all(cuboids);
+  all(boxes);
+  all(segments);
+  all(tris);
+  all(discs);
+  all(rects);
+  check(spheres, spheres, true);
+  check(cuboids, cuboids, true);
+  check(boxes, boxes, true);
+  check(segments, segments, true);
+  check(tris, tris, true);
+  check(discs, discs, true);
+  check(rects, rects, true);
+  TEST_ASSERT(reflexive, "every shape contains itself");
+  TEST_ASSERT(implies, "contains(a, b) implies intersects(a, b)");
+  TEST_ASSERT(farAway, "nothing contains a shape far away from it");
+}
+
 template <class T> void test_cuboid_flattening() {
   TEST_SUITE("Cuboid flattening");
   using B = mathlib::Cuboid<T>;
@@ -2414,6 +2653,7 @@ template <class T> void run_all(const char *type) {
   test_line_segment<T>();
   test_triangle<T>();
   test_intersects_symmetry<T>();
+  test_contains2d<T>();
   test_shape_factories<T>();
   test_shape_transforms<T>();
   test_anchored_scaling<T>();
@@ -2431,6 +2671,7 @@ template <class T> void run_all(const char *type) {
   test_rectangle_flattening<T>();
   test_rectangle3_flattening<T>();
   test_oriented_cuboid<T>();
+  test_contains3d<T>();
   test_lifting_to_3d<T>();
   test_intersects3d_symmetry<T>();
   test_shapes3d_factories<T>();

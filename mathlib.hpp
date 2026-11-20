@@ -4475,6 +4475,806 @@ template <std::floating_point T>
   return intersects(circle, box, epsilon);
 }
 
+namespace detail {
+// Whether the box around `center` reaching `extent` along each axis lies in
+// `cuboid`.
+template <std::floating_point T>
+constexpr bool boundsHold(const Cuboid<T> &cuboid, const Vec3<T> &center,
+                          const Vec3<T> &extent, T epsilon) {
+  for (std::size_t axis = 0; axis < 3; axis++)
+    if (center[axis] - extent[axis] < cuboid.min[axis] - epsilon ||
+        center[axis] + extent[axis] > cuboid.max[axis] + epsilon)
+      return false;
+  return true;
+}
+
+// Whether `point` lies in `shape`, with `epsilon` of slack for every shape.
+template <std::floating_point T>
+constexpr bool pointWithin(const Circle<T> &circle, const Vec2<T> &point,
+                           T epsilon) {
+  const auto reach = circle.radius + epsilon;
+  return circle.center.distanceSquaredTo(point) <= reach * reach;
+}
+template <std::floating_point T>
+constexpr bool pointWithin(const Rectangle<T> &rect, const Vec2<T> &point,
+                           T epsilon) {
+  return point.x >= rect.min.x - epsilon && point.x <= rect.max.x + epsilon &&
+         point.y >= rect.min.y - epsilon && point.y <= rect.max.y + epsilon;
+}
+template <std::floating_point T>
+constexpr bool pointWithin(const Sphere<T> &sphere, const Vec3<T> &point,
+                           T epsilon) {
+  const auto reach = sphere.radius + epsilon;
+  return sphere.center.distanceSquaredTo(point) <= reach * reach;
+}
+template <std::floating_point T>
+constexpr bool pointWithin(const Cuboid<T> &cuboid, const Vec3<T> &point,
+                           T epsilon) {
+  return boundsHold(cuboid, point, Vec3<T>(), epsilon);
+}
+template <class Shape, class Point, std::floating_point T>
+bool pointWithin(const Shape &shape, const Point &point, T epsilon) {
+  return shape.containsPoint(point, epsilon);
+}
+
+// How far a disc reaches from its center along each axis.
+template <std::floating_point T> Vec3<T> discExtent(const Circle3<T> &disc) {
+  const auto n = disc.normal.normalized();
+  auto along = [&](T component) {
+    return disc.radius * std::sqrt(std::max(T{0}, 1 - component * component));
+  };
+  return {along(n.x), along(n.y), along(n.z)};
+}
+
+// The corners of a shape with straight edges.
+template <std::floating_point T>
+constexpr std::array<Vec2<T>, 2> vertices(const LineSegment<T> &segment) {
+  return {segment.start, segment.end};
+}
+template <std::floating_point T>
+constexpr std::array<Vec2<T>, 3> vertices(const Triangle<T> &triangle) {
+  return {triangle.a, triangle.b, triangle.c};
+}
+template <std::floating_point T>
+constexpr std::array<Vec2<T>, 4> vertices(const Rectangle<T> &rect) {
+  return rect.corners();
+}
+template <std::floating_point T>
+constexpr std::array<Vec3<T>, 2> vertices(const LineSegment3<T> &segment) {
+  return {segment.start, segment.end};
+}
+template <std::floating_point T>
+constexpr std::array<Vec3<T>, 3> vertices(const Triangle3<T> &triangle) {
+  return {triangle.a, triangle.b, triangle.c};
+}
+template <std::floating_point T>
+constexpr std::array<Vec3<T>, 4> vertices(const Rectangle3<T> &rect) {
+  return rect.corners();
+}
+template <std::floating_point T>
+constexpr std::array<Vec3<T>, 8> vertices(const Cuboid<T> &cuboid) {
+  return cuboid.corners();
+}
+template <std::floating_point T>
+constexpr std::array<Vec3<T>, 8> vertices(const OrientedCuboid<T> &box) {
+  return box.corners();
+}
+
+// Whether every corner of `inner` lies in `outer`, which for a convex `outer`
+// means all of `inner` does.
+template <class Outer, class Inner, std::floating_point T>
+constexpr bool verticesWithin(const Outer &outer, const Inner &inner,
+                              T epsilon) {
+  for (const auto &vertex : vertices(inner))
+    if (!pointWithin(outer, vertex, epsilon))
+      return false;
+  return true;
+}
+
+// Whether a circle or disc in the plane of the convex polygon `outer` lies in
+// it: its center must be inside and at least `radius` from every edge.
+template <class Outer, class Point, std::floating_point T>
+bool roundWithinPolygon(const Outer &outer, const Point &center, T radius,
+                        T epsilon) {
+  if (!pointWithin(outer, center, epsilon))
+    return false;
+  for (const auto &edge : outer.edges())
+    if (edge.distanceTo(center) < radius - epsilon)
+      return false;
+  return true;
+}
+
+// Whether `disc` lies in the plane through `planePoint` with normal
+// `planeNormal`, which need not be unit length.
+template <std::floating_point T>
+bool discInPlane(const Circle3<T> &disc, const Vec3<T> &planePoint,
+                 const Vec3<T> &planeNormal, T epsilon) {
+  const auto m = planeNormal.normalized();
+  return std::abs(m.dotProductWith(disc.center - planePoint)) <= epsilon &&
+         disc.radius * disc.normal.normalized().crossProductWith(m).length() <=
+             epsilon;
+}
+} // namespace detail
+
+// contains(outer, inner) is defined for every pair of 2D shapes and every pair
+// of 3D shapes. Unlike intersects, the order matters. Every shape here is
+// convex, so a shape with corners lies inside another exactly when all of its
+// corners do.
+
+/// Returns whether the circle `inner` lies entirely within the circle
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const Circle<T> &outer, const Circle<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  return outer.center.distanceTo(inner.center) + inner.radius <=
+         outer.radius + epsilon;
+}
+
+/// Returns whether the rectangle `inner` lies entirely within the circle
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] constexpr bool contains(const Circle<T> &outer,
+                                      const Rectangle<T> &inner,
+                                      T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the segment `inner` lies entirely within the circle
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] constexpr bool contains(const Circle<T> &outer,
+                                      const LineSegment<T> &inner,
+                                      T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the triangle `inner` lies entirely within the circle
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] constexpr bool contains(const Circle<T> &outer,
+                                      const Triangle<T> &inner,
+                                      T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the circle `inner` lies entirely within the rectangle
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] constexpr bool contains(const Rectangle<T> &outer,
+                                      const Circle<T> &inner,
+                                      T epsilon = defaultEpsilon<T>) {
+  return inner.center.x - inner.radius >= outer.min.x - epsilon &&
+         inner.center.x + inner.radius <= outer.max.x + epsilon &&
+         inner.center.y - inner.radius >= outer.min.y - epsilon &&
+         inner.center.y + inner.radius <= outer.max.y + epsilon;
+}
+
+/// Returns whether the rectangle `inner` lies entirely within the rectangle
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] constexpr bool contains(const Rectangle<T> &outer,
+                                      const Rectangle<T> &inner,
+                                      T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the segment `inner` lies entirely within the rectangle
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] constexpr bool contains(const Rectangle<T> &outer,
+                                      const LineSegment<T> &inner,
+                                      T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the triangle `inner` lies entirely within the rectangle
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] constexpr bool contains(const Rectangle<T> &outer,
+                                      const Triangle<T> &inner,
+                                      T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the circle `inner` lies entirely within the segment
+/// `outer`, its boundary included.
+///
+/// Only a circle of radius at most `epsilon` fits, since the segment has no
+/// area.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const LineSegment<T> &outer, const Circle<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  return inner.radius <= epsilon && outer.containsPoint(inner.center, epsilon);
+}
+
+/// Returns whether the rectangle `inner` lies entirely within the segment
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const LineSegment<T> &outer,
+                            const Rectangle<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the segment `inner` lies entirely within the segment
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const LineSegment<T> &outer,
+                            const LineSegment<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the triangle `inner` lies entirely within the segment
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const LineSegment<T> &outer,
+                            const Triangle<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the circle `inner` lies entirely within the triangle
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const Triangle<T> &outer, const Circle<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  return detail::roundWithinPolygon(outer, inner.center, inner.radius, epsilon);
+}
+
+/// Returns whether the rectangle `inner` lies entirely within the triangle
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const Triangle<T> &outer, const Rectangle<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the segment `inner` lies entirely within the triangle
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const Triangle<T> &outer,
+                            const LineSegment<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the triangle `inner` lies entirely within the triangle
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const Triangle<T> &outer, const Triangle<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the sphere `inner` lies entirely within the sphere
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const Sphere<T> &outer, const Sphere<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  return outer.center.distanceTo(inner.center) + inner.radius <=
+         outer.radius + epsilon;
+}
+
+/// Returns whether the cuboid `inner` lies entirely within the sphere
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] constexpr bool contains(const Sphere<T> &outer,
+                                      const Cuboid<T> &inner,
+                                      T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the box `inner` lies entirely within the sphere
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] constexpr bool contains(const Sphere<T> &outer,
+                                      const OrientedCuboid<T> &inner,
+                                      T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the segment `inner` lies entirely within the sphere
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] constexpr bool contains(const Sphere<T> &outer,
+                                      const LineSegment3<T> &inner,
+                                      T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the triangle `inner` lies entirely within the sphere
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] constexpr bool contains(const Sphere<T> &outer,
+                                      const Triangle3<T> &inner,
+                                      T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the disc `inner` lies entirely within the sphere
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const Sphere<T> &outer, const Circle3<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  // The disc point farthest from the sphere's center is on its rim, on the
+  // side away from that center.
+  const auto n = inner.normal.normalized();
+  const auto offset = inner.center - outer.center;
+  const auto height = n.dotProductWith(offset);
+  const auto across = (offset - n * height).length() + inner.radius;
+  const auto reach = outer.radius + epsilon;
+  return height * height + across * across <= reach * reach;
+}
+
+/// Returns whether the rectangle `inner` lies entirely within the sphere
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] constexpr bool contains(const Sphere<T> &outer,
+                                      const Rectangle3<T> &inner,
+                                      T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the sphere `inner` lies entirely within the cuboid
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] constexpr bool contains(const Cuboid<T> &outer,
+                                      const Sphere<T> &inner,
+                                      T epsilon = defaultEpsilon<T>) {
+  return detail::boundsHold(outer, inner.center,
+                            Vec3<T>(inner.radius, inner.radius, inner.radius),
+                            epsilon);
+}
+
+/// Returns whether the cuboid `inner` lies entirely within the cuboid
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] constexpr bool contains(const Cuboid<T> &outer,
+                                      const Cuboid<T> &inner,
+                                      T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the box `inner` lies entirely within the cuboid
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] constexpr bool contains(const Cuboid<T> &outer,
+                                      const OrientedCuboid<T> &inner,
+                                      T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the segment `inner` lies entirely within the cuboid
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] constexpr bool contains(const Cuboid<T> &outer,
+                                      const LineSegment3<T> &inner,
+                                      T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the triangle `inner` lies entirely within the cuboid
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] constexpr bool contains(const Cuboid<T> &outer,
+                                      const Triangle3<T> &inner,
+                                      T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the disc `inner` lies entirely within the cuboid
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const Cuboid<T> &outer, const Circle3<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  return detail::boundsHold(outer, inner.center, detail::discExtent(inner),
+                            epsilon);
+}
+
+/// Returns whether the rectangle `inner` lies entirely within the cuboid
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] constexpr bool contains(const Cuboid<T> &outer,
+                                      const Rectangle3<T> &inner,
+                                      T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the sphere `inner` lies entirely within the box
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const OrientedCuboid<T> &outer,
+                            const Sphere<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  const detail::BoxFrame frame(outer);
+  return contains(
+      frame.box, Sphere<T>{frame.toLocal(inner.center), inner.radius}, epsilon);
+}
+
+/// Returns whether the cuboid `inner` lies entirely within the box
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const OrientedCuboid<T> &outer,
+                            const Cuboid<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the box `inner` lies entirely within the box
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const OrientedCuboid<T> &outer,
+                            const OrientedCuboid<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the segment `inner` lies entirely within the box
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const OrientedCuboid<T> &outer,
+                            const LineSegment3<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the triangle `inner` lies entirely within the box
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const OrientedCuboid<T> &outer,
+                            const Triangle3<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the disc `inner` lies entirely within the box
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const OrientedCuboid<T> &outer,
+                            const Circle3<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  const detail::BoxFrame frame(outer);
+  return contains(frame.box,
+                  Circle3<T>{frame.toLocal(inner.center), inner.radius,
+                             frame.toLocalDirection(inner.normal)},
+                  epsilon);
+}
+
+/// Returns whether the rectangle `inner` lies entirely within the box
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const OrientedCuboid<T> &outer,
+                            const Rectangle3<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the sphere `inner` lies entirely within the segment
+/// `outer`, its boundary included.
+///
+/// Only a sphere of radius at most `epsilon` fits, since the segment has
+/// no volume.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const LineSegment3<T> &outer,
+                            const Sphere<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  return inner.radius <= epsilon && outer.containsPoint(inner.center, epsilon);
+}
+
+/// Returns whether the cuboid `inner` lies entirely within the segment
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const LineSegment3<T> &outer,
+                            const Cuboid<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the box `inner` lies entirely within the segment
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const LineSegment3<T> &outer,
+                            const OrientedCuboid<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the segment `inner` lies entirely within the segment
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const LineSegment3<T> &outer,
+                            const LineSegment3<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the triangle `inner` lies entirely within the segment
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const LineSegment3<T> &outer,
+                            const Triangle3<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the disc `inner` lies entirely within the segment
+/// `outer`, its boundary included.
+///
+/// Only a disc of radius at most `epsilon` fits, since the segment has no
+/// area.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const LineSegment3<T> &outer,
+                            const Circle3<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  return inner.radius <= epsilon && outer.containsPoint(inner.center, epsilon);
+}
+
+/// Returns whether the rectangle `inner` lies entirely within the segment
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const LineSegment3<T> &outer,
+                            const Rectangle3<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the sphere `inner` lies entirely within the triangle
+/// `outer`, its boundary included.
+///
+/// Only a sphere of radius at most `epsilon` fits, since the triangle has
+/// no volume.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const Triangle3<T> &outer, const Sphere<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  return inner.radius <= epsilon && outer.containsPoint(inner.center, epsilon);
+}
+
+/// Returns whether the cuboid `inner` lies entirely within the triangle
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const Triangle3<T> &outer, const Cuboid<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the box `inner` lies entirely within the triangle
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const Triangle3<T> &outer,
+                            const OrientedCuboid<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the segment `inner` lies entirely within the triangle
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const Triangle3<T> &outer,
+                            const LineSegment3<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the triangle `inner` lies entirely within the triangle
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const Triangle3<T> &outer,
+                            const Triangle3<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the disc `inner` lies entirely within the triangle
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const Triangle3<T> &outer, const Circle3<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  return detail::discInPlane(inner, outer.a, outer.normal(), epsilon) &&
+         detail::roundWithinPolygon(outer, inner.center, inner.radius, epsilon);
+}
+
+/// Returns whether the rectangle `inner` lies entirely within the triangle
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const Triangle3<T> &outer,
+                            const Rectangle3<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the sphere `inner` lies entirely within the disc
+/// `outer`, its boundary included.
+///
+/// Only a sphere of radius at most `epsilon` fits, since the disc has
+/// no volume.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const Circle3<T> &outer, const Sphere<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  return inner.radius <= epsilon && outer.containsPoint(inner.center, epsilon);
+}
+
+/// Returns whether the cuboid `inner` lies entirely within the disc
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const Circle3<T> &outer, const Cuboid<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the box `inner` lies entirely within the disc
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const Circle3<T> &outer,
+                            const OrientedCuboid<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the segment `inner` lies entirely within the disc
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const Circle3<T> &outer,
+                            const LineSegment3<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the triangle `inner` lies entirely within the disc
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const Circle3<T> &outer, const Triangle3<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the disc `inner` lies entirely within the disc
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const Circle3<T> &outer, const Circle3<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  return detail::discInPlane(inner, outer.center, outer.normal, epsilon) &&
+         outer.center.distanceTo(inner.center) + inner.radius <=
+             outer.radius + epsilon;
+}
+
+/// Returns whether the rectangle `inner` lies entirely within the disc
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const Circle3<T> &outer, const Rectangle3<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the sphere `inner` lies entirely within the rectangle
+/// `outer`, its boundary included.
+///
+/// Only a sphere of radius at most `epsilon` fits, since the rectangle has
+/// no volume.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const Rectangle3<T> &outer, const Sphere<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  return inner.radius <= epsilon && outer.containsPoint(inner.center, epsilon);
+}
+
+/// Returns whether the cuboid `inner` lies entirely within the rectangle
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const Rectangle3<T> &outer, const Cuboid<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the box `inner` lies entirely within the rectangle
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const Rectangle3<T> &outer,
+                            const OrientedCuboid<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the segment `inner` lies entirely within the rectangle
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const Rectangle3<T> &outer,
+                            const LineSegment3<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the triangle `inner` lies entirely within the rectangle
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const Rectangle3<T> &outer,
+                            const Triangle3<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
+/// Returns whether the disc `inner` lies entirely within the rectangle
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const Rectangle3<T> &outer, const Circle3<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  return detail::discInPlane(inner, outer.corner, outer.normal(), epsilon) &&
+         detail::roundWithinPolygon(outer, inner.center, inner.radius, epsilon);
+}
+
+/// Returns whether the rectangle `inner` lies entirely within the rectangle
+/// `outer`, its boundary included.
+/// @param epsilon How far `inner` may reach outside `outer` and still count.
+template <std::floating_point T>
+[[nodiscard]] bool contains(const Rectangle3<T> &outer,
+                            const Rectangle3<T> &inner,
+                            T epsilon = defaultEpsilon<T>) {
+  return detail::verticesWithin(outer, inner, epsilon);
+}
+
 using Circlef = Circle<float>;
 using Circled = Circle<double>;
 using Rectanglef = Rectangle<float>;
