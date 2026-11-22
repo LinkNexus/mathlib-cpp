@@ -102,6 +102,17 @@ template <std::floating_point T> struct Vec2 {
     return {x * other.x, y * other.y};
   }
 
+  /// Returns the component-wise minimum of this vector and `other`.
+  [[nodiscard]]
+  constexpr Vec2 minWith(const Vec2 &other) const {
+    return {std::min(x, other.x), std::min(y, other.y)};
+  }
+  /// Returns the component-wise maximum of this vector and `other`.
+  [[nodiscard]]
+  constexpr Vec2 maxWith(const Vec2 &other) const {
+    return {std::max(x, other.x), std::max(y, other.y)};
+  }
+
   /// Adds `other` to this vector.
   /// @return A reference to this vector.
   constexpr Vec2 &add(const Vec2 &other) { return *this = added(other); }
@@ -547,6 +558,17 @@ template <std::floating_point T> struct Vec3 {
   [[nodiscard]]
   constexpr Vec3 scaledBy(const Vec3 &other) const {
     return {x * other.x, y * other.y, z * other.z};
+  }
+
+  /// Returns the component-wise minimum of this vector and `other`.
+  [[nodiscard]]
+  constexpr Vec3 minWith(const Vec3 &other) const {
+    return {std::min(x, other.x), std::min(y, other.y), std::min(z, other.z)};
+  }
+  /// Returns the component-wise maximum of this vector and `other`.
+  [[nodiscard]]
+  constexpr Vec3 maxWith(const Vec3 &other) const {
+    return {std::max(x, other.x), std::max(y, other.y), std::max(z, other.z)};
   }
 
   /// Adds `other` to this vector.
@@ -1439,8 +1461,7 @@ template <std::floating_point T> struct Rectangle {
   /// order.
   [[nodiscard]]
   static constexpr Rectangle fromCorners(const Vec2<T> &a, const Vec2<T> &b) {
-    return {{std::min(a.x, b.x), std::min(a.y, b.y)},
-            {std::max(a.x, b.x), std::max(a.y, b.y)}};
+    return {a.minWith(b), a.maxWith(b)};
   }
 
   /// Returns the rectangle with corner `min` and the given width (along x) and
@@ -3007,8 +3028,7 @@ template <std::floating_point T> struct Cuboid {
   /// order.
   [[nodiscard]]
   static constexpr Cuboid fromCorners(const Vec3<T> &a, const Vec3<T> &b) {
-    return {{std::min(a.x, b.x), std::min(a.y, b.y), std::min(a.z, b.z)},
-            {std::max(a.x, b.x), std::max(a.y, b.y), std::max(a.z, b.z)}};
+    return {a.minWith(b), a.maxWith(b)};
   }
 
   /// Returns the cuboid with corner `min` and the given width (along x), height
@@ -5446,21 +5466,19 @@ namespace detail {
 template <std::floating_point T, std::size_t N>
 constexpr Rectangle<T> boundsOf(const std::array<Vec2<T>, N> &points) {
   Rectangle<T> result{points[0], points[0]};
-  for (const auto &point : points)
-    for (std::size_t axis = 0; axis < 2; axis++) {
-      result.min[axis] = std::min(result.min[axis], point[axis]);
-      result.max[axis] = std::max(result.max[axis], point[axis]);
-    }
+  for (const auto &point : points) {
+    result.min = result.min.minWith(point);
+    result.max = result.max.maxWith(point);
+  }
   return result;
 }
 template <std::floating_point T, std::size_t N>
 constexpr Cuboid<T> boundsOf(const std::array<Vec3<T>, N> &points) {
   Cuboid<T> result{points[0], points[0]};
-  for (const auto &point : points)
-    for (std::size_t axis = 0; axis < 3; axis++) {
-      result.min[axis] = std::min(result.min[axis], point[axis]);
-      result.max[axis] = std::max(result.max[axis], point[axis]);
-    }
+  for (const auto &point : points) {
+    result.min = result.min.minWith(point);
+    result.max = result.max.maxWith(point);
+  }
   return result;
 }
 

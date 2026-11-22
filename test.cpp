@@ -178,6 +178,9 @@ template <class T> void test_vec2_arithmetic() {
   TEST_ASSERT(near(a.scaledBy(T(3)), {3, 6}), "scaledBy scalar");
   TEST_ASSERT(near(b.dividedBy(2), {T(1.5), T(-2.5)}), "dividedBy");
   TEST_ASSERT(near(a.scaledBy(b), {3, -10}), "scaledBy");
+  TEST_ASSERT(near(a.minWith(b), {1, -5}), "minWith");
+  TEST_ASSERT(near(a.maxWith(b), {3, 2}), "maxWith");
+  TEST_ASSERT(near(a.minWith(b), b.minWith(a)), "minWith commutative");
 
   TEST_ASSERT(near(a + b, {4, -3}), "operator+");
   TEST_ASSERT(near(a - b, {-2, 7}), "operator-");
@@ -492,6 +495,9 @@ template <class T> void test_vec3_arithmetic() {
   TEST_ASSERT(near(b / T(2), {2, T(-2.5), 3}), "operator/");
   TEST_ASSERT(near(-a, {-1, -2, -3}), "unary minus");
   TEST_ASSERT(near(a.scaledBy(b), {4, -10, 18}), "scaledBy");
+  TEST_ASSERT(near(a.minWith(b), {1, -5, 3}), "minWith");
+  TEST_ASSERT(near(a.maxWith(b), {4, 2, 6}), "maxWith");
+  TEST_ASSERT(near(a.maxWith(b), b.maxWith(a)), "maxWith commutative");
 
   Vec3<T> v = a;
   TEST_ASSERT(&v.add(b) == &v && near(v, {5, -3, 9}), "add");
