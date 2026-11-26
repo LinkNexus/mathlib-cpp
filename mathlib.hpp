@@ -101,6 +101,12 @@ template <std::floating_point T> struct Vec2 {
   constexpr Vec2 scaledBy(const Vec2 &other) const {
     return {x * other.x, y * other.y};
   }
+  /// Returns the component-wise quotient of this vector and `other`.
+  [[nodiscard]]
+  constexpr Vec2 dividedBy(const Vec2 &other) const {
+    assert(other.x != 0 && other.y != 0 && "Cannot divide by 0");
+    return {x / other.x, y / other.y};
+  }
 
   /// Returns the component-wise minimum of this vector and `other`.
   [[nodiscard]]
@@ -131,6 +137,11 @@ template <std::floating_point T> struct Vec2 {
   /// Multiplies each component by the matching component of `other`.
   /// @return A reference to this vector.
   constexpr Vec2 &scaleBy(const Vec2 &other) { return *this = scaledBy(other); }
+  /// Divides each component by the matching component of `other`.
+  /// @return A reference to this vector.
+  constexpr Vec2 &divideBy(const Vec2 &other) {
+    return *this = dividedBy(other);
+  }
 
   /// Returns the sum of the two vectors.
   [[nodiscard]]
@@ -559,6 +570,13 @@ template <std::floating_point T> struct Vec3 {
   constexpr Vec3 scaledBy(const Vec3 &other) const {
     return {x * other.x, y * other.y, z * other.z};
   }
+  /// Returns the component-wise quotient of this vector and `other`.
+  [[nodiscard]]
+  constexpr Vec3 dividedBy(const Vec3 &other) const {
+    assert(other.x != 0 && other.y != 0 && other.z != 0 &&
+           "Cannot divide by 0");
+    return {x / other.x, y / other.y, z / other.z};
+  }
 
   /// Returns the component-wise minimum of this vector and `other`.
   [[nodiscard]]
@@ -589,6 +607,11 @@ template <std::floating_point T> struct Vec3 {
   /// Multiplies each component by the matching component of `other`.
   /// @return A reference to this vector.
   constexpr Vec3 &scaleBy(const Vec3 &other) { return *this = scaledBy(other); }
+  /// Divides each component by the matching component of `other`.
+  /// @return A reference to this vector.
+  constexpr Vec3 &divideBy(const Vec3 &other) {
+    return *this = dividedBy(other);
+  }
 
   /// Returns the sum of the two vectors.
   [[nodiscard]]
